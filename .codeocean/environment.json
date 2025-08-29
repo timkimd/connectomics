@@ -18,6 +18,12 @@
 					"version": "0.11.3"
 				},
 				{
+					"name": "jupytext"
+				},
+				{
+					"name": "matplotlib"
+				},
+				{
 					"name": "nwbwidgets",
 					"version": "0.11.3"
 				},
