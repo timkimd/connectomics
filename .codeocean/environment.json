@@ -45,6 +45,22 @@
 				{
 					"name": "pynwb",
 					"version": "3.0.0"
+				},
+				{
+					"name": "scipy",
+					"version": "1.15.3"
+				},
+				{
+					"name": "seaborn",
+					"version": "0.13.2"
+				},
+				{
+					"name": "skeleton-plot",
+					"version": "0.1.0"
+				},
+				{
+					"name": "typing",
+					"version": "3.7.4.3"
 				}
 			],
 			"options": {},
