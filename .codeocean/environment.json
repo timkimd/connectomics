@@ -15,6 +15,10 @@
 					"version": "1.2.1"
 				},
 				{
+					"name": "caveclient",
+					"version": "7.11.0"
+				},
+				{
 					"name": "hdmf",
 					"version": "3.14.6"
 				},
