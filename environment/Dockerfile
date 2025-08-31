@@ -1,4 +1,4 @@
-# hash:sha256:fb05a9c647e597cc4d9a338eec55c5640f895aa9b7158bc918d1be29fc77166e
+# hash:sha256:445277c601426f473114011a6da1837801022c114a1d8adf6b316320d152211b
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
 
@@ -9,6 +9,7 @@ COPY git-askpass /
 RUN pip install -U --no-cache-dir \
     aind-data-access-api==1.2.1 \
     caveclient==7.11.0 \
+    cv2 \
     hdmf==3.14.6 \
     hdmf-zarr==0.11.3 \
     jupytext==1.17.3 \
