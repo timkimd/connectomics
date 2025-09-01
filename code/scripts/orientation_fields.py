@@ -1,7 +1,7 @@
 #%%
 import sys
 import os
-import cv2 as cv
+import opencv
 from os.path import join as pjoin
 import platform
 from caveclient import CAVEclient
@@ -81,3 +81,4 @@ plt.imshow(image_data, cmap="gray")
 plt.axis("off")
 plt.show()
 
+#%%

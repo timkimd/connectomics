@@ -8,6 +8,14 @@
 		"mount_secrets": true
 	},
 	"installers": {
+		"conda": {
+			"packages": [
+				{
+					"name": "opencv",
+					"version": "4.8.0"
+				}
+			]
+		},
 		"pip": {
 			"packages": [
 				{
@@ -17,9 +25,6 @@
 				{
 					"name": "caveclient",
 					"version": "7.11.0"
-				},
-				{
-					"name": "cv2"
 				},
 				{
 					"name": "hdmf",
