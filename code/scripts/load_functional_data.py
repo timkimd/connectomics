@@ -87,11 +87,11 @@ def interp_across_planes(column, volume, remove_known_bad_planes=True, mouse_id=
 
     #sessions = get_sessions(mouse_id, data_dir)
 
-    dff_traces = []
-    rois_traces = []
-    planes_traces = []
+    # dff_traces = []
+    # rois_traces = []
+    # planes_traces = []
 
-    base_times = nwbfile.processing["plane-0"].data_interfaces["dff"].data
+    base_times = nwbfile.processing["plane-0"].data_interfaces["dff"].timestamps
     for plane in planes:
         timestamps = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].timestamps
         traces_xarray = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].data
@@ -115,5 +115,5 @@ def interp_across_planes(column, volume, remove_known_bad_planes=True, mouse_id=
 
 
 #%%
-column = 1
-interp = interp_across_planes(1,)
+interp = interp_across_planes(column, volume, remove_known_bad_planes=True, mouse_id=mouse_id)
+interp
