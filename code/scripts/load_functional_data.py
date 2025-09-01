@@ -9,18 +9,12 @@ from matplotlib import pyplot as plt
 import itertools
 import seaborn as sns
 from scipy.sparse import csr_array
-from scipy import stats, spatial 
+from scipy import stats, spatial, interpolate 
 from typing import Union, Optional
 import glob
 import collections
 from hdmf_zarr import NWBZarrIO
 from nwbwidgets import nwb2widget
-
-# import allen-specific functions
-from allen_v1dd.client import OPhysClient, OPhysSession
-from allen_v1dd.stimulus_analysis.drifting_gratings import DriftingGratings
-from allen_v1dd.stimulus_analysis.natural_images import NaturalImages
-from allen_v1dd.stimulus_analysis.natural_movie import NaturalMovie
 
 # Set the utils path
 utils_dir = pjoin("..", "utils")
@@ -43,7 +37,7 @@ print('Selected subject_id is', subject_id)
 
 #%% get one mouse metadata
 this_mouse_metadata = metadata[metadata['subject_id']==subject_id].sort_values(by='session_date')
-this_mouse_metadata.head()
+#this_mouse_metadata.head()
 
 #%% get this mouse directory
 data_dir = '/data/'
@@ -73,8 +67,53 @@ with NWBZarrIO(str(nwb_path), 'r') as io:
 nwbfile
 
 #%% get the stimulus data for images
-ophys_table = nwbfile.processing["plane-0"].data_interfaces["dff"]
+ophys_table = nwbfile.processing["plane-0"].data_interfaces["dff"].data
 ophys_table
 
-#%% preprocess data function
+#%% get the session list for one animal
+def get_sessions(mouse_id, data_dir):
+    mouse_dir = glob.glob((os.path.join(data_dir, mouse_id+'*')))[0]
+    
+    session_names = []
+    _, session_names, _ = next(os.walk(mouse_dir))
+    return sorted(session_names)
 
+#%% preprocess data function
+def interp_across_planes(column, volume, remove_known_bad_planes=True, mouse_id=mouse_id):
+    planes = range(6)
+    if remove_known_bad_planes:
+        if column ==1 and volume == 5:
+            planes = range(5)
+
+    #sessions = get_sessions(mouse_id, data_dir)
+
+    dff_traces = []
+    rois_traces = []
+    planes_traces = []
+
+    base_times = nwbfile.processing["plane-0"].data_interfaces["dff"].data
+    for plane in planes:
+        timestamps = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].timestamps
+        traces_xarray = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].data
+        f_interp = interpolate.interp1d(timestamps, traces_xarray, 
+                            kind='linear', axis=0, bounds_error=False, fill_value="extrapolate")
+        
+        dff_traces.extend(f_interp(base_times))
+        rois_traces.extend(traces_xarray.roi)
+        planes_traces.extend([plane] * len(traces_xarray.roi))
+        
+    dff_traces = np.array(dff_traces)
+    planes_traces = np.array(planes_traces)
+    rois_traces = np.array(rois_traces)
+    
+    return {
+        "dff": dff_traces,
+        "plane": planes_traces,
+        "roi": rois_traces,
+        "base_time": base_times,
+    }
+
+
+#%%
+column = 1
+interp = interp_across_planes(1,)
