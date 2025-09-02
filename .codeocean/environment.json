@@ -59,6 +59,10 @@
 					"version": "0.1.0"
 				},
 				{
+					"name": "tqdm",
+					"version": "4.67.1"
+				},
+				{
 					"name": "typing",
 					"version": "3.7.4.3"
 				}
