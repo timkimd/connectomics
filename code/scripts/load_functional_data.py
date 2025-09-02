@@ -141,19 +141,13 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
     cell_df = []
     for k, mouse in enumerate(tqdm.tqdm(mouse_ids, leave=False, desc='mouse_ids')):
         mouse_dir = glob.glob(os.path.join(data_dir, mouse + '*'))[0]
-        all_sessions = get_sessions(mouse, data_dir)
-        if isinstance(sessions, dict):
-            requested = _to_list(sessions.get(mouse), default=all_sessions)
+        if sessions is None:
+            sessions = get_sessions(mouse, data_dir)
         else:
-            requested = _to_list(sessions, default=all_sessions)
+            sessions = os.path.join(mouse_dir, session)
 
-        # keep only those sessions you want 
-        use_sessions = [s for s in requested if s in all_sessions]
-        missing = sorted(set(requested) - set(use_sessions))
-        if missing:
-            print(f'Warning: {mouse} missing sessions: {missing}')
         for column, volume in tqdm.tqdm(col_vol, desc ="col/vol"):
-            for i, session in enumerate(tqdm.tqdm(use_sessions, leave=False, desc='sessions')):
+            for i, session in enumerate(tqdm.tqdm(sessions, leave=False, desc='sessions')):
                 session_dir = os.path.join(mouse_dir, session)
                 nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
                 nwb_path = os.path.join(session_dir, nwb_file)
