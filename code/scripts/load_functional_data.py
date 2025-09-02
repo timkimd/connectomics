@@ -132,3 +132,7 @@ os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, "stim_table.pkl")
 df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
+#%%
+file_path = '/root/capsule/scratch/stim_table.pkl'
+with open(file_path, 'rb') as file:
+    stim_table = pickle.load(file)
