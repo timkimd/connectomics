@@ -79,6 +79,7 @@ def get_sessions(mouse_id, data_dir):
     return sorted(session_names)
 
 #%% preprocess data function
+##add for session loop, save per session, or save to monster table with session information
 def interp_across_planes(column, volume, remove_known_bad_planes=True):
     planes = range(6)
     if remove_known_bad_planes:
@@ -112,6 +113,12 @@ def interp_across_planes(column, volume, remove_known_bad_planes=True):
         "base_time": base_times,
     }
 
-#%%
-interp = interp_across_planes(column, volume, remove_known_bad_planes=True)
-interp
+#%% loop over sessions
+mouse_id = '409828'
+data_dir = '/data/'
+sessions = get_sessions(mouse_id, data_dir)
+cell_df = []
+
+for i, session in enumerate(sessions)
+    interp = interp_across_planes(column, volume, remove_known_bad_planes=True)
+    
