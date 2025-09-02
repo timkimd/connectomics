@@ -79,41 +79,39 @@ def get_sessions(mouse_id, data_dir):
     return sorted(session_names)
 
 #%% preprocess data function
-def interp_across_planes(column, volume, remove_known_bad_planes=True, mouse_id=mouse_id):
+def interp_across_planes(column, volume, remove_known_bad_planes=True):
     planes = range(6)
     if remove_known_bad_planes:
         if column ==1 and volume == 5:
             planes = range(5)
 
-    #sessions = get_sessions(mouse_id, data_dir)
-
-    # dff_traces = []
-    # rois_traces = []
-    # planes_traces = []
+    dff_traces = []
+    planes_traces = []
+    roi_traces = []
 
     base_times = nwbfile.processing["plane-0"].data_interfaces["dff"].timestamps
     for plane in planes:
         timestamps = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].timestamps
         traces_xarray = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].data
+        roi_table = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].rois.to_dataframe()
+        roi = roi_table.roi
         f_interp = interpolate.interp1d(timestamps, traces_xarray, 
                             kind='linear', axis=0, bounds_error=False, fill_value="extrapolate")
-        
-        dff_traces.extend(f_interp(base_times))
-        rois_traces.extend(traces_xarray.roi)
-        planes_traces.extend([plane] * len(traces_xarray.roi))
-        
+        (dff_traces.extend(f_interp(base_times).T))
+        roi_traces.extend(roi)
+        planes_traces.extend([plane]* len(roi))
+
     dff_traces = np.array(dff_traces)
     planes_traces = np.array(planes_traces)
-    rois_traces = np.array(rois_traces)
+    roi_traces = np.array(roi_traces)
     
     return {
         "dff": dff_traces,
         "plane": planes_traces,
-        "roi": rois_traces,
+        "roi": roi_traces,
         "base_time": base_times,
     }
 
-
 #%%
-interp = interp_across_planes(column, volume, remove_known_bad_planes=True, mouse_id=mouse_id)
+interp = interp_across_planes(column, volume, remove_known_bad_planes=True)
 interp
