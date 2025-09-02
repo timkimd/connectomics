@@ -43,7 +43,8 @@
 					"version": "3.10.6"
 				},
 				{
-					"name": "numpy"
+					"name": "numpy",
+					"version": "2.2.6"
 				},
 				{
 					"name": "nwbwidgets",
@@ -58,7 +59,8 @@
 					"version": "3.0.0"
 				},
 				{
-					"name": "ruff"
+					"name": "ruff",
+					"version": "0.12.11"
 				},
 				{
 					"name": "scipy",
@@ -73,10 +75,12 @@
 					"version": "0.1.0"
 				},
 				{
-					"name": "standard-transform"
+					"name": "standard-transform",
+					"version": "1.4.1"
 				},
 				{
-					"name": "tqdm"
+					"name": "tqdm",
+					"version": "4.67.1"
 				},
 				{
 					"name": "typing",
