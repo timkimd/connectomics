@@ -1,4 +1,4 @@
-# hash:sha256:b04685b4f0541cde5e05aa0dd4864e1d3ed51008c782d7518335555cfeca904e
+# hash:sha256:29571bc80e807d2447ace5418d16d540a25186620c0f3ff9b59257e41f632674
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
 
@@ -17,16 +17,16 @@ RUN pip install -U --no-cache-dir \
     hdmf-zarr==0.11.3 \
     jupytext==1.17.3 \
     matplotlib==3.10.6 \
-    numpy \
+    numpy==2.2.6 \
     nwbwidgets==0.11.3 \
     pandas==2.2.3 \
     pynwb==3.0.0 \
-    ruff \
+    ruff==0.12.11 \
     scipy==1.15.3 \
     seaborn==0.13.2 \
     skeleton-plot==0.1.0 \
-    standard-transform \
-    tqdm \
+    standard-transform==1.4.1 \
+    tqdm==4.67.1 \
     typing==3.7.4.3
 
 COPY postInstall /

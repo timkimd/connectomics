@@ -629,3 +629,22 @@ def filter_synapse_table(
         post_mask = np.ones(len(synapse_table), dtype=bool)
 
     return synapse_table[pre_mask & post_mask]
+
+
+# Utility function to calculate distances
+def calculate_lateral_distances(pre_cell_df, post_cell_df=None):
+    """ Calculates the lateral distances in µm between all neurons."""
+    if post_cell_df is None:
+        post_cell_df = pre_cell_df
+    
+    pre_lateral_locations = np.array(pre_cell_df[["pt_position_trform_x", "pt_position_trform_z"]])
+    post_lateral_locations = np.array(post_cell_df[["pt_position_trform_x", "pt_position_trform_z"]])
+    lateral_distances = spatial.distance.cdist(pre_lateral_locations, post_lateral_locations)
+    
+    id_pairs = list(itertools.product(pre_cell_df["pt_root_id"], post_cell_df["pt_root_id"]))
+    
+    lateral_distance_df = pd.DataFrame(id_pairs, columns=['pre_pt_root_id', 'post_pt_root_id'])
+    lateral_distance_df['distance'] = lateral_distances.flatten()
+
+    lateral_distance_df = lateral_distance_df[lateral_distance_df['pre_pt_root_id'] != lateral_distance_df['post_pt_root_id']]
+    return lateral_distance_df
