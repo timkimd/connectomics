@@ -17,7 +17,7 @@ import glob
 from hdmf_zarr import NWBZarrIO
 from nwbwidgets import nwb2widget
 
-from helpers import OLS_CV, poisson_glm_cv
+from helpers import OLS_CV, poisson_glm_cv, fit_beta_model_with_cv, plot_beta_cv_results
 
 platstring = platform.platform()
 system = platform.system()
@@ -147,7 +147,7 @@ plt.show()
 print("Poisson GLM Cross-Validation:")
 print("=" * 50)
 
-cv_results, y_poisson = poisson_glm_cv(X, y, cv_folds=5)
+cv_results = fit_beta_model_with_cv(X, y, cv_folds=5)
 
 # Calculate summary statistics
 cv_pseudo_r2_mean = np.mean(cv_results['pseudo_r2'])

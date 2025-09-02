@@ -470,7 +470,7 @@ def plot_beta_cv_results(results):
     if cv_results['actual'] and cv_results['predictions']:
         axes[0, 1].scatter(cv_results['actual'], cv_results['predictions'],
                            alpha=0.4, color='green', label='CV Predictions')
-        cv_corr, _ = pearsonr(cv_results['actual'], cv_results['predictions'])
+        cv_corr, _ = stats.pearsonr(cv_results['actual'], cv_results['predictions'])
         min_val = min(min(cv_results['actual']), min(cv_results['predictions']))
         max_val = max(max(cv_results['actual']), max(cv_results['predictions']))
         axes[0, 1].plot([min_val, max_val], [min_val, max_val], 'r--', lw=2)
@@ -514,23 +514,32 @@ def plot_beta_cv_results(results):
     if cv_results['coefficients'] and len(cv_results['coefficients']) > 0:
         coeff_array = np.array(cv_results['coefficients'])
         if coeff_array.ndim == 2:
-            param_names = ['const'] + list(results['full_model']['model'].exog_names[1:]) if \
-            results['full_model']['model'].exog_names[0] == 'const' else list(results['full_model']['model'].exog_names)
+            # Get parameter names from the model's params index
+            try:
+                param_names = list(full_model['model'].params.index)
+            except:
+                # Fallback: create generic names based on coefficient array size
+                param_names = ['const'] + [f'x{i}' for i in range(coeff_array.shape[1] - 1)]
 
-            # Plot first few coefficients (excluding intercept if present)
-            start_idx = 1 if param_names[0] == 'const' else 0
-            n_params = min(4, coeff_array.shape[1] - start_idx)  # Show up to 4 parameters
+            # Ensure we don't exceed the available coefficients
+            n_params_to_plot = min(len(param_names), coeff_array.shape[1], 5)  # Show up to 5 parameters
 
-            for i in range(n_params):
+            # Skip intercept for plotting if it exists and we have more than one parameter
+            start_idx = 1 if (len(param_names) > 1 and
+                              ('const' in param_names[0].lower() or 'intercept' in param_names[0].lower())) else 0
+
+            colors = plt.cm.tab10(np.linspace(0, 1, n_params_to_plot - start_idx))
+
+            for i, color in enumerate(colors):
                 param_idx = start_idx + i
                 if param_idx < len(param_names) and param_idx < coeff_array.shape[1]:
-                    axes[1, 2].plot(range(1, coeff_array.shape[0] + 1), coeff_array[:, param_idx],
-                                    'o-', alpha=0.7, label=param_names[param_idx][:10])
+                    param_name = param_names[param_idx]
+                    # Truncate long parameter names for legend
+                    display_name = param_name[:12] + '...' if len(param_name) > 12 else param_name
 
-            axes[1, 2].set_xlabel('Fold')
-            axes[1, 2].set_ylabel('Coefficient Value')
-            axes[1, 2].set_title('Coefficient Stability Across Folds')
-            axes[1, 2].legend()
+                    axes[1, 2].plot(range(1, coeff_array.shape[0] + 1),
+                                    coeff_array[:, param_idx],
+                                    'o-', alpha=0.7, color=color, label=display_name)
 
     plt.suptitle(f'Beta Regression with Cross-Validation\n{results["formula"]}', fontsize=14)
     plt.tight_layout()
