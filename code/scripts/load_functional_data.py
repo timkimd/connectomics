@@ -127,8 +127,6 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
         print(f'mouse: {mouse}')
 
         this_mouse_metadata = metadata[metadata['subject_id']==int(mouse)].sort_values(by='session_date')
-        # for column, volume in tqdm.tqdm(col_vol, desc ="col/vol"):
-        #     print(f'col_vol = {column}, {volume}')
         for i, session in enumerate(tqdm.tqdm(use_sessions, leave=False, desc='sessions')):
             column = this_mouse_metadata[metadata["name"]==session].column.values[0]
             volume = this_mouse_metadata[metadata["name"]==session].volume.values[0]
