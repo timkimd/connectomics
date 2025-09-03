@@ -3,21 +3,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
-import scipy.stats as stats
-from sklearn.model_selection import KFold
-from statsmodels.genmod.families import Poisson
-from statsmodels.genmod.families.links import log
 
-import sys
 import os
 from os.path import join as pjoin
 import platform
-import glob
-from hdmf_zarr import NWBZarrIO
-from nwbwidgets import nwb2widget
 
-from helpers import OLS_CV, poisson_glm_cv, fit_beta_model_with_cv, plot_beta_cv_results
+from helpers import OLS_CV, fit_beta_model_with_cv, plot_beta_cv_results
 
 platstring = platform.platform()
 system = platform.system()
@@ -47,11 +38,12 @@ final_co_table = pd.merge(func_co_cells, struc_data, on=['pt_root_id'], how='inn
 
 #%% Correlation checking
 # SSI options are 'ssi', 'ssi_pref_both', or 'ssi_orth'
-var_list = ["ssi", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft"]
+var_list = ["ssi", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft", "soma_depth"]
 sub_df = final_co_table[var_list].copy().reset_index(drop=True)
 # Check for NaNs in any values and drop those rows
 sub_df.dropna(inplace=True)
 
+# The following code is adapted from Shawn Olsen's presentation on correlation comparisons
 # Set layout for pairwise plot - 3 X 3 plot grid
 g = sns.PairGrid(sub_df,  vars=var_list, diag_sharey=False)
 
@@ -92,7 +84,7 @@ plt.show()
 X = sub_df[var_list[1:]]
 y = sub_df[var_list[0]]
 
-#%% OLS model fitting ======================================================================
+#%% OLS model fitting
 ols_cv_scores = OLS_CV(X, y, cv_folds=5)
 
 summary_metrics = []
@@ -153,8 +145,6 @@ plt.show()
 fig.savefig(pjoin(fig_path, 'ols_cv_results.png'), dpi=300, bbox_inches='tight')
 
 #%% GLM Time baby
-# TODO: Need to change Poisson GLM to Beta or something else
-# Perform Poisson GLM cross-validation
 print("Poisson GLM Cross-Validation:")
 print("=" * 50)
 
@@ -163,12 +153,9 @@ cv_results = fit_beta_model_with_cv(X, y, cv_folds=5)
 # Calculate summary statistics
 cv_pseudo_r2_mean = cv_results["cv_summary"]['mean_pseudo_r2']
 cv_pseudo_r2_std = np.std(cv_results["cv_summary"]['std_pseudo_r2'])
-# cv_deviance_mean = np.mean(cv_results["cv_results"]['deviance'])
-# cv_deviance_std = np.std(cv_results["cv_results"]['deviance'])
 
 print(f"\nPoisson GLM Cross-Validation Summary:")
 print(f"Mean Pseudo R²: {cv_pseudo_r2_mean:.4f} ± {cv_pseudo_r2_std:.4f}")
-# print(f"Mean Deviance: {cv_deviance_mean:.4f} ± {cv_deviance_std:.4f}")
 fold_info = pd.DataFrame(cv_results["cv_results"]["fold_info"])
 print(f"Mean AIC: {fold_info.model_aic.mean():.4f} ± {fold_info.model_aic.std():.4f}")
 

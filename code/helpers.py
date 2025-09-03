@@ -9,12 +9,9 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.othermod.betareg import BetaModel
 import scipy.stats as stats
-from scipy.special import logit as scipy_logit, expit
 from sklearn.model_selection import KFold
 from statsmodels.genmod.families import Poisson
 from statsmodels.genmod.families.links import Log
-
-import glob
 
 def OLS_CV(X, y, cv_folds=5, random_state=42):
     """
@@ -132,49 +129,6 @@ def poisson_glm_cv(X, y, cv_folds=5, random_state=42):
 
     return cv_results, y_poisson
 
-def beta_regression_manual(X, y, max_iter=100, tol=1e-6):
-    """
-    Manual implementation of Beta regression using iterative fitting
-    """
-    X_const = sm.add_constant(X)
-
-    # Initialize with OLS on logit-transformed data
-    y_logit = scipy_logit(y)
-    ols_init = sm.OLS(y_logit, X_const).fit()
-    beta = ols_init.params.values
-
-    # Iterative fitting (simplified IRLS)
-    for i in range(max_iter):
-        eta = X_const @ beta
-        mu = expit(eta)  # inverse logit
-
-        # Beta regression weights (simplified)
-        var_mu = mu * (1 - mu)
-        weights = 1 / var_mu
-        weights = np.clip(weights, 0.1, 100)  # Stabilize weights
-
-        # Weighted least squares update
-        W = np.diag(weights)
-        try:
-            beta_new = np.linalg.solve(X_const.T @ W @ X_const, X_const.T @ W @ y_logit)
-            if np.linalg.norm(beta_new - beta) < tol:
-                break
-            beta = beta_new
-        except np.linalg.LinAlgError:
-            break
-
-    # Final predictions
-    final_eta = X_const @ beta
-    predictions = expit(final_eta)
-
-    return {
-        'coefficients': beta,
-        'predictions': predictions,
-        'fitted_values': final_eta,
-        'param_names': ['const'] + list(X.columns)
-    }
-
-
 def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_formula=None,
                            transform_to_unit=True, epsilon=1e-6, cv_folds=5, random_state=42):
     """
@@ -263,14 +217,6 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
             X_train_model, X_test_model = X_const.iloc[train_idx], X_const.iloc[test_idx]
             y_train, y_test = y_beta.iloc[train_idx], y_beta.iloc[test_idx]
 
-            # Add constant if requested
-            # if add_constant:
-            #     X_train_model = sm.add_constant(X_train)
-            #     X_test_model = sm.add_constant(X_test)
-            # else:
-            #     X_train_model = X_train.copy()
-            #     X_test_model = X_test.copy()
-
             # Fit Beta model on training data
             beta_model = BetaModel(endog=y_train, exog=X_train_model)
             beta_results = beta_model.fit(disp=0)  # Suppress output
@@ -349,11 +295,6 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
             mean_coeffs = np.mean(coeff_array, axis=0)
             std_coeffs = np.std(coeff_array, axis=0)
 
-            # if add_constant:
-            #     param_names = ['const'] + X.columns.tolist()
-            # else:
-            #     param_names = X.columns.tolist()
-
             print(f"\nAverage Coefficients Across Folds:")
             for i, name in enumerate(predictor_names):
                 if i < len(mean_coeffs):
@@ -367,7 +308,6 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
     print("=" * 40)
 
     try:
-        # Add constant if requested
         if add_constant:
             X_full = sm.add_constant(X)
         else:
@@ -516,25 +456,13 @@ def plot_beta_cv_results(results):
     if cv_results['coefficients'] and len(cv_results['coefficients']) > 0:
         coeff_array = np.array(cv_results['coefficients'])
         if coeff_array.ndim == 2:
-            # Get parameter names from the model's params index
             try:
                 param_names = list(full_model['model'].params.index)
             except:
-                # Fallback: create generic names based on coefficient array size
+                # Fallback: create generic names based on coefficient array size, this will probs include stuff we don't want
                 param_names = ['const'] + [f'x{i}' for i in range(coeff_array.shape[1] - 1)]
 
-            # Ensure we don't exceed the available coefficients
-            # n_params_to_plot = min(len(param_names), coeff_array.shape[1], 5)  # Show up to 5 parameters
-
-            # Skip intercept for plotting if it exists and we have more than one parameter
-            # start_idx = 1 if (len(param_names) > 1 and
-            #                   ('const' in param_names[0].lower() or 'intercept' in param_names[0].lower())) else 0
-
-            # colors = plt.cm.tab10(np.linspace(0, 1, n_params_to_plot - start_idx))
-
             for i in range(len(param_names)-1):  # Subtracting 1 to avoid plotting precision
-                # param_idx = start_idx + i
-                # if param_idx < len(param_names) and param_idx < coeff_array.shape[1]:
                 param_name = param_names[i]
                 # Truncate long parameter names for legend
                 display_name = param_name[:12] + '...' if len(param_name) > 12 else param_name
