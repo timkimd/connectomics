@@ -114,10 +114,6 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
             with NWBZarrIO(str(nwb_path), 'r') as io:
                 nwbfile = io.read()
 
-            # stim_table = pull_stim_info(nwbfile)
-            # stim_cols = ["stim_name", "start_time", "stop_time", "duration"]
-            # stim_lists = {c: stim_table[c].tolist() for c in stim_cols}
-
             stim_int_table = pull_interval_info(nwbfile)
             stim_int_cols = ["stim_name", "start_time", "stop_time","temporal_frequency","spatial_frequency","direction","frame","image_order","image_index","stimulus_condition_id"]
             stim_int_lists = {c: stim_int_table[c].tolist() for c in stim_int_cols}
@@ -129,7 +125,6 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
                     "column": column,
                     "volume": volume,
                     **interp,
-                    #**stim_lists
                     **stim_int_lists
             })
             print(f'added {session} to cell_df')

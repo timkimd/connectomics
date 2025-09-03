@@ -111,26 +111,44 @@ def get_trial_indices(base_times, trial):
 
 t = _to_1d_float_array(base_times)  # compute once
 dff_obj = this_session.dff.iloc[0] 
+stim_name = 'drifting_gratings_windowed'
 for stim_name in stim_int_df["stim_name"].unique():
     stim_sections = get_trial_sections(stim_int_df, stim_name)
-    trial_dff_traces = []
-    for trial in stim_sections:
-        mask = get_trial_mask_from_t(t, trial)
-        trial_times = t[mask]
-        idx = get_trial_indices(base_times, trial)
-        trial_dff_traces.append(dff_obj[:,idx])
 
-psth_per_cell = np.mean(np.stack(per_trial_means, axis=1), axis=1)
+#%%
+trial_dff_traces = []
+for trial in stim_sections:
+    mask = get_trial_mask_from_t(t, trial)
+    trial_times = t[mask]
+    idx = get_trial_indices(base_times, trial)
+    trial_dff_traces.append(dff_obj[:,idx])
+#%% get the shortest trial and snip all trials to that length
+min_trial = min(dff.shape[1] for dff in trial_dff_traces)
+stacked = np.stack([dff[:,:min_trial] for dff in trial_dff_traces], axis =2) # get cells by time by trials
+psth = stacked.mean(axis=2)
 
+#%% plot psth for this session
+fig, ax = plt.subplots(figsize=(5, 10))
+n_bins = psth.shape[1]
+fq = 6
+trial_dur = n_bins / fq
+time_axis = np.arange(n_bins) / fq 
+ax.imshow(psth, aspect='auto', 
+                origin='lower',
+                interpolation='none', 
+                extent=[time_axis[0], 
+                time_axis[-1], 0, psth.shape[0]])
+ax.set_xlabel('Time (s)',fontsize=20)
+ax.set_ylabel('Neurons',fontsize=20)
+ax.set_xticks([0, 0.5, 1, 1.5, 2])
+fig.colorbar(i, ax=ax, label='ΔF/F')
+fig.tight_layout()
 
-
-
-
-
-
-
-
-
+#%%
+nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
+nwb_path = os.path.join(session_dir, nwb_file)
+with NWBZarrIO(str(nwb_path), 'r') as io:
+    nwbfile = io.read()
 
 
 
