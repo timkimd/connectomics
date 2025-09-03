@@ -86,7 +86,7 @@ def get_stimulus_mask(sections, base_times):
     for start, end in sections:
         mask |= (t >= float(start)) & (t <= float(end))
     return mask
-
+#%%
 trial_sections = [(s, e) for s, e in zip(stim_int_df["start_time"], stim_int_df["stop_time"])]
 stim = pd.unique(stim_int_df.stim_name)
 #%%
@@ -106,15 +106,13 @@ def get_trial_indices(base_times, trial):
     start, end = map(float, trial)
     mask = (t >= start) & (t <= end)
     return np.where(mask)[0]
-#%% chop dff for every trial, then take an average of 
-# the response during a trial type
+#%% chop dff for every trial, then take an average of the response during a trial type
 
 t = _to_1d_float_array(base_times)  # compute once
 dff_obj = this_session.dff.iloc[0]
 stim_name = 'drifting_gratings_windowed'
 #%% 
 sessions = pd.unique(stim_int_table.session_id)
-
 stim_traces = []
 for session in sessions:
     this_session = stim_int_table[stim_int_table['session_id']==session]
@@ -140,24 +138,124 @@ for session in sessions:
             #idx = get_trial_indices(base_times, trial)
             trial_dff_traces.append(dff_obj[:,idx])
 
+        # make PSTH and get mean over trial
+        min_trial = min(dff.shape[1] for dff in trial_dff_traces)
+        stacked = np.stack([dff[:,:min_trial] for dff in trial_dff_traces], axis =2) # get cells by time by trials
+        psth = stacked.mean(axis=2)
+        psth_chop = psth[:,3:]
+        psth_chop_mean = psth_chop.mean(axis=1)
+
         stim_traces.append({
             "session_id": session,
             "stimulus": stim_name,
-            "ttraces": trial_dff_traces
+            "ttraces": trial_dff_traces,
+            "psth": psth,
+            "psth_chop": psth_chop,
+            "mean_chop": psth_chop_mean
         })
 #%%
 traces_df = pd.DataFrame(stim_traces)
 out_dir = "/root/capsule/scratch"
 os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, "dff_traces_table.pkl")
+out_path = os.path.join(out_dir, "dff_psth_table.pkl")
 traces_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
 
 #%%
-file_path = '/root/capsule/scratch/dff_traces_table.pkl'
+file_path = '/root/capsule/scratch/dff_psth_table.pkl'
 with open(file_path, 'rb') as file:
-    dff_traces_table = pickle.load(file)
-dff_traces_table
+    dff_psth_table = pickle.load(file)
+dff_psth_table
+
+#%% load metadata for RFs
+mat_version = 1196
+metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
+rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
+window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
+ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
+position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata_position.csv'))
+
+coreg_df = pd.read_feather(
+    f"{data_dir}/metadata/coregistration_{mat_version}.feather"
+)
+
+
+#%% find the RFs from metadata, overlay with windows, which are 30 deg diameter
+
+# map root_ids to column, volume, roi, plane
+sessions = pd.unique(stim_int_table.session_id)
+cvpr_map = []
+for session in sessions:
+    cvpr = stim_int_table.loc[stim_int_table["session_id"] == session]
+    column = (cvpr.column.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
+    volume = (cvpr.volume.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
+    plane = cvpr.plane.values[0]
+    roi = cvpr.roi.values[0]
+    cvpr_map.append({
+        "session_id": session,
+        "column": column,
+        "volume": volume,
+        "plane": plane, 
+        "roi": roi
+    }) 
+cvpr_df = pd.DataFrame(cvpr_map)
+#%%
+rf_metadata['volume'] = pd.to_numeric(rf_metadata['volume'], errors='coerce').astype('Int64')
+#%%
+all_sess_root_ids = []
+for session in sessions:
+    cvpr = cvpr_df.loc[cvpr_df["session_id"] == session]
+    sess_cvpr = cvpr.explode(["column", "volume", "plane", "roi"])
+    root_id = pd.merge(coreg_df, sess_cvpr)
+    all_sess_root_ids.append(root_id)
+
+rf_cvpr_root_id = pd.concat(all_sess_root_ids)
+all_sess_rf = pd.merge(rf_cvpr_root_id, rf_metadata, on=['column', 'volume', 'plane', 'roi'])
+
+#%% find overlapping RFs and windows
+
+
+
+distance_squared = (point_x - circle_center_x)**2 + (point_y - circle_center_y)**2
+radius_squared = circle_radius**2
+
+return distance_squared <= radius_squared
+
+# Example Usage:
+center_x = 0
+center_y = 0
+radius = 5
+
+point1_x, point1_y = 3, 4  # Inside the circle (distance = 5, on the edge)
+point2_x, point2_y = 6, 1  # Outside the circle (distance > 5)
+point3_x, point3_y = 1, 1  # Inside the circle (distance < 5)
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#%%
+nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
+nwb_path = os.path.join(session_dir, nwb_file)
+with NWBZarrIO(str(nwb_path), 'r') as io:
+    nwbfile = io.read()
 
 #%% get the shortest trial and snip all trials to that length
 
@@ -211,19 +309,6 @@ ax.set_title('full')
 #ax.set_xticks([0, 0.5, 1, 1.5, 2])
 fig.colorbar(im, ax=ax, label='ΔF/F')
 fig.tight_layout()
-
-#%% load metadata for RFs
-
-rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
-window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
-ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
-position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata_position.csv'))
-
-#%%
-nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
-nwb_path = os.path.join(session_dir, nwb_file)
-with NWBZarrIO(str(nwb_path), 'r') as io:
-    nwbfile = io.read()
 
 
 
