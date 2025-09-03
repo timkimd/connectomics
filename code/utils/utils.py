@@ -8,7 +8,20 @@ from matplotlib.patches import Arc, FancyArrowPatch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.sparse import csr_array
 from scipy.stats import rankdata
-
+import sys
+import os
+from os.path import join as pjoin
+import platform
+import itertools
+import seaborn as sns
+from scipy import stats, spatial, interpolate 
+from typing import Union, Optional
+import glob
+import collections
+from hdmf_zarr import NWBZarrIO
+from nwbwidgets import nwb2widget
+import tqdm as tqdm
+import pickle
 
 def clear_axis(axis):
     axis.set_xticks([])
@@ -629,3 +642,4 @@ def filter_synapse_table(
         post_mask = np.ones(len(synapse_table), dtype=bool)
 
     return synapse_table[pre_mask & post_mask]
+

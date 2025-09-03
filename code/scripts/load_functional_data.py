@@ -75,11 +75,16 @@ def interp_across_planes(nwbfile, column, volume, remove_known_bad_planes=True):
 
 #%% pull stim information
 def pull_stim_info(nwbfile):
-    stim_df = []
     stim = nwbfile.epochs.to_dataframe().reset_index(drop=True)
     keep = ["stim_name", "start_time", "stop_time", "duration"]
     return stim[keep].copy()
 
+#%% 
+ 
+def pull_interval_info(nwbfile):
+    stim_intervals = nwbfile.intervals["stimulus_table"].to_dataframe().reset_index(drop=True)
+    keep_inters = ["stim_name", "start_time", "stop_time","temporal_frequency","spatial_frequency","direction","frame","image_order","image_index","stimulus_condition_id"]
+    return stim_intervals[keep_inters].copy()
 
 #%% loop over sessions
 def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
@@ -109,10 +114,14 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
             with NWBZarrIO(str(nwb_path), 'r') as io:
                 nwbfile = io.read()
 
-            stim_table = pull_stim_info(nwbfile)
-            stim_cols = ["stim_name", "start_time", "stop_time", "duration"]
-            stim_lists = {c: stim_table[c].tolist() for c in stim_cols}
-            
+            # stim_table = pull_stim_info(nwbfile)
+            # stim_cols = ["stim_name", "start_time", "stop_time", "duration"]
+            # stim_lists = {c: stim_table[c].tolist() for c in stim_cols}
+
+            stim_int_table = pull_interval_info(nwbfile)
+            stim_int_cols = ["stim_name", "start_time", "stop_time","temporal_frequency","spatial_frequency","direction","frame","image_order","image_index","stimulus_condition_id"]
+            stim_int_lists = {c: stim_int_table[c].tolist() for c in stim_int_cols}
+
             interp = interp_across_planes(nwbfile, column, volume, remove_known_bad_planes=True)
             cell_df.append({
                     "mouse_id": mouse,
@@ -120,20 +129,29 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
                     "column": column,
                     "volume": volume,
                     **interp,
-                    **stim_lists
+                    #**stim_lists
+                    **stim_int_lists
             })
             print(f'added {session} to cell_df')
     return pd.DataFrame(cell_df)
 
 #%%
-df = pd.DataFrame(stim_df) 
+df = pd.DataFrame(stim_interval_df) 
 out_dir = "/root/capsule/scratch"
 os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, "stim_table.pkl")
+out_path = os.path.join(out_dir, "stim_int_table.pkl")
 df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
 
 #%%
-file_path = '/root/capsule/scratch/stim_table.pkl'
+file_path = '/root/capsule/scratch/stim_int_table.pkl'
 with open(file_path, 'rb') as file:
-    stim_table = pickle.load(file)
+    stim_int_table = pickle.load(file)
+stim_int_table
+
+#%%
+session_dir = '/root/capsule/data/409828_V1DD_GoldenMouse/409828_2018-11-06_14-02-59_nwb_2025-08-08_16-27-52'
+nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
+nwb_path = os.path.join(session_dir, nwb_file)
+with NWBZarrIO(str(nwb_path), 'r') as io:
+    nwbfile = io.read()
