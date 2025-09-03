@@ -110,38 +110,106 @@ def get_trial_indices(base_times, trial):
 # the response during a trial type
 
 t = _to_1d_float_array(base_times)  # compute once
-dff_obj = this_session.dff.iloc[0] 
+dff_obj = this_session.dff.iloc[0]
 stim_name = 'drifting_gratings_windowed'
-for stim_name in stim_int_df["stim_name"].unique():
-    stim_sections = get_trial_sections(stim_int_df, stim_name)
+#%% 
+sessions = pd.unique(stim_int_table.session_id)
+
+stim_traces = []
+for session in sessions:
+    this_session = stim_int_table[stim_int_table['session_id']==session]
+    base_times = this_session.base_time
+    t = _to_1d_float_array(base_times) 
+    dff_obj = this_session.dff.iloc[0]  
+
+    stim_int_df = pd.DataFrame({
+        "stim_name":  this_session.stim_name,
+        "start_time": this_session.start_time,
+        "stop_time":  this_session.stop_time,
+    })
+    stim_int_df = stim_int_df.explode(["stim_name", "start_time", "stop_time"], ignore_index=True)
+
+    for stim_name in ['drifting_gratings_windowed' , 'drifting_gratings_full']:
+        stim_sections = get_trial_sections(stim_int_df, stim_name)
+
+        trial_dff_traces = []
+        for trial in stim_sections:
+            mask = get_trial_mask_from_t(t, trial)
+            trial_times = t[mask]
+            idx = np.where(mask)[0]  
+            #idx = get_trial_indices(base_times, trial)
+            trial_dff_traces.append(dff_obj[:,idx])
+
+        stim_traces.append({
+            "session_id": session,
+            "stimulus": stim_name,
+            "ttraces": trial_dff_traces
+        })
+#%%
+traces_df = pd.DataFrame(stim_traces)
+out_dir = "/root/capsule/scratch"
+os.makedirs(out_dir, exist_ok=True)
+out_path = os.path.join(out_dir, "dff_traces_table.pkl")
+traces_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
+print(f"Saved to {out_path}")
 
 #%%
-trial_dff_traces = []
-for trial in stim_sections:
-    mask = get_trial_mask_from_t(t, trial)
-    trial_times = t[mask]
-    idx = get_trial_indices(base_times, trial)
-    trial_dff_traces.append(dff_obj[:,idx])
+file_path = '/root/capsule/scratch/dff_traces_table.pkl'
+with open(file_path, 'rb') as file:
+    dff_traces_table = pickle.load(file)
+dff_traces_table
+
 #%% get the shortest trial and snip all trials to that length
-min_trial = min(dff.shape[1] for dff in trial_dff_traces)
-stacked = np.stack([dff[:,:min_trial] for dff in trial_dff_traces], axis =2) # get cells by time by trials
+
+min_trial = min(dff.shape[1] for dff in dff_session.ttraces[0])
+stacked = np.stack([dff[:,:min_trial] for dff in dff_session.ttraces[0]], axis =2) # get cells by time by trials
 psth = stacked.mean(axis=2)
+psth_chop_window = psth[:,3:]
+psth_chop_mean_window = psth_chop.mean(axis=1)
+#%%
+min_trial = min(dff.shape[1] for dff in dff_session.ttraces[1])
+stacked = np.stack([dff[:,:min_trial] for dff in dff_session.ttraces[1]], axis =2) # get cells by time by trials
+psth = stacked.mean(axis=2)
+psth_chop_full = psth[:,3:]
+psth_chop_mean_full = psth_chop.mean(axis=1)
 
 #%% plot psth for this session
 fig, ax = plt.subplots(figsize=(5, 10))
-n_bins = psth.shape[1]
+n_bins = psth_chop_window.shape[1]
 fq = 6
 trial_dur = n_bins / fq
 time_axis = np.arange(n_bins) / fq 
-ax.imshow(psth, aspect='auto', 
+im = ax.imshow(psth_chop_window, aspect='auto', 
                 origin='lower',
                 interpolation='none', 
                 extent=[time_axis[0], 
-                time_axis[-1], 0, psth.shape[0]])
+                time_axis[-1], 0, psth_chop_window.shape[0]])
+
 ax.set_xlabel('Time (s)',fontsize=20)
 ax.set_ylabel('Neurons',fontsize=20)
-ax.set_xticks([0, 0.5, 1, 1.5, 2])
-fig.colorbar(i, ax=ax, label='ΔF/F')
+ax.set_title('window')
+#ax.set_xticks([0, 0.5, 1, 1.5, 2])
+fig.colorbar(im, ax=ax, label='ΔF/F')
+fig.tight_layout()
+
+#%%
+index = (psth_chop_full - psth_chop_window) 
+fig, ax = plt.subplots(figsize=(5, 10))
+n_bins = index.shape[1]
+fq = 6
+trial_dur = n_bins / fq
+time_axis = np.arange(n_bins) / fq 
+im = ax.imshow(index, aspect='auto', 
+                origin='lower',
+                interpolation='none', 
+                extent=[time_axis[0], 
+                time_axis[-1], 0, index.shape[0]])
+
+ax.set_xlabel('Time (s)',fontsize=20)
+ax.set_ylabel('Neurons',fontsize=20)
+ax.set_title('full')
+#ax.set_xticks([0, 0.5, 1, 1.5, 2])
+fig.colorbar(im, ax=ax, label='ΔF/F')
 fig.tight_layout()
 
 #%% load metadata for RFs
@@ -149,18 +217,7 @@ fig.tight_layout()
 rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
 window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
 ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
-
-
-
-
-
-
-
-
-
-
-
-
+position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata_position.csv'))
 
 #%%
 nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
