@@ -144,6 +144,24 @@ ax.set_xticks([0, 0.5, 1, 1.5, 2])
 fig.colorbar(i, ax=ax, label='ΔF/F')
 fig.tight_layout()
 
+#%% load metadata for RFs
+
+rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
+window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
+ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
+
+
+
+
+
+
+
+
+
+
+
+
+
 #%%
 nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
 nwb_path = os.path.join(session_dir, nwb_file)
