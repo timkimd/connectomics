@@ -216,6 +216,8 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
     if not isinstance(y, pd.Series):
         y = pd.Series(y, name='y')
 
+    if add_constant:
+        X_const = sm.add_constant(X)
     # Transform y to (0,1) if needed
     y_beta = y.copy()
     original_range = (y.min(), y.max())
@@ -230,7 +232,7 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
 
     # Auto-generate formula if not provided
     if formula is None:
-        predictor_names = X.columns.tolist()
+        predictor_names = X_const.columns.tolist()
         formula = f"y ~ {' + '.join(predictor_names)}"
         print(f"Auto-generated formula: {formula}")
 
@@ -258,16 +260,16 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
 
         try:
             # Split data
-            X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+            X_train_model, X_test_model = X_const.iloc[train_idx], X_const.iloc[test_idx]
             y_train, y_test = y_beta.iloc[train_idx], y_beta.iloc[test_idx]
 
             # Add constant if requested
-            if add_constant:
-                X_train_model = sm.add_constant(X_train)
-                X_test_model = sm.add_constant(X_test)
-            else:
-                X_train_model = X_train.copy()
-                X_test_model = X_test.copy()
+            # if add_constant:
+            #     X_train_model = sm.add_constant(X_train)
+            #     X_test_model = sm.add_constant(X_test)
+            # else:
+            #     X_train_model = X_train.copy()
+            #     X_test_model = X_test.copy()
 
             # Fit Beta model on training data
             beta_model = BetaModel(endog=y_train, exog=X_train_model)
@@ -347,13 +349,13 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
             mean_coeffs = np.mean(coeff_array, axis=0)
             std_coeffs = np.std(coeff_array, axis=0)
 
-            if add_constant:
-                param_names = ['const'] + X.columns.tolist()
-            else:
-                param_names = X.columns.tolist()
+            # if add_constant:
+            #     param_names = ['const'] + X.columns.tolist()
+            # else:
+            #     param_names = X.columns.tolist()
 
             print(f"\nAverage Coefficients Across Folds:")
-            for i, name in enumerate(param_names):
+            for i, name in enumerate(predictor_names):
                 if i < len(mean_coeffs):
                     print(f"{name:>15}: {mean_coeffs[i]:>8.4f} ± {std_coeffs[i]:.4f}")
     else:
@@ -522,27 +524,30 @@ def plot_beta_cv_results(results):
                 param_names = ['const'] + [f'x{i}' for i in range(coeff_array.shape[1] - 1)]
 
             # Ensure we don't exceed the available coefficients
-            n_params_to_plot = min(len(param_names), coeff_array.shape[1], 5)  # Show up to 5 parameters
+            # n_params_to_plot = min(len(param_names), coeff_array.shape[1], 5)  # Show up to 5 parameters
 
             # Skip intercept for plotting if it exists and we have more than one parameter
-            start_idx = 1 if (len(param_names) > 1 and
-                              ('const' in param_names[0].lower() or 'intercept' in param_names[0].lower())) else 0
+            # start_idx = 1 if (len(param_names) > 1 and
+            #                   ('const' in param_names[0].lower() or 'intercept' in param_names[0].lower())) else 0
 
-            colors = plt.cm.tab10(np.linspace(0, 1, n_params_to_plot - start_idx))
+            # colors = plt.cm.tab10(np.linspace(0, 1, n_params_to_plot - start_idx))
 
-            for i, color in enumerate(colors):
-                param_idx = start_idx + i
-                if param_idx < len(param_names) and param_idx < coeff_array.shape[1]:
-                    param_name = param_names[param_idx]
-                    # Truncate long parameter names for legend
-                    display_name = param_name[:12] + '...' if len(param_name) > 12 else param_name
+            for i in range(len(param_names)-1):  # Subtracting 1 to avoid plotting precision
+                # param_idx = start_idx + i
+                # if param_idx < len(param_names) and param_idx < coeff_array.shape[1]:
+                param_name = param_names[i]
+                # Truncate long parameter names for legend
+                display_name = param_name[:12] + '...' if len(param_name) > 12 else param_name
 
-                    axes[1, 2].plot(range(1, coeff_array.shape[0] + 1),
-                                    coeff_array[:, param_idx],
-                                    'o-', alpha=0.7, color=color, label=display_name)
+                axes[1, 2].plot(range(coeff_array.shape[0]),
+                                coeff_array[:, i],
+                                'o-', alpha=0.7, label=display_name)
+                axes[1, 2].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
     plt.suptitle(f'Beta Regression with Cross-Validation\n{results["formula"]}', fontsize=14)
     plt.tight_layout()
     plt.show()
+
+    return fig, axes
 
     

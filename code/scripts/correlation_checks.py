@@ -25,25 +25,31 @@ if system == "Darwin":
     # macOS
     data_root = "/Volumes/Brain2025/"
 
+fig_path = pjoin(data_root, 'temp_results')
 np.random.seed(42)
 #%% Load in test metric info for structural data and example func data
 metadata = pd.read_csv(os.path.join(data_root, 'v1dd_1196/V1DD_metadata.csv'))
 struc_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/joint_clustering_feat_df_v1dd.feather'))
-func_data = pd.read_csv(pjoin(data_root, 'v1dd_1196/v1dd_metrics.csv'))
+func_data = pd.read_csv(pjoin(data_root, 'v1dd_1196/surround_supression_index_M409828.csv'))
 coregistered_cells = pd.read_feather(pjoin(data_root, 'v1dd_1196/coregistration_1196.feather'))
+
+# Cleaning funcitonal data
+func_sub_table = func_data[['ssi', 'column', 'volume', 'plane', 'roi']]
+func_sub_table['volume'] = pd.to_numeric(func_sub_table['volume'], errors='coerce').astype('Int64')
+func_sub_table.dropna(inplace=True)
 
 # Renaming column from root_id to pt_root_id
 struc_data.rename(columns={'root_id': 'pt_root_id'}, inplace=True)
 
 #%% Merging time
-func_co_cells = pd.merge(func_data, coregistered_cells, on=['column', 'volume', 'plane', 'roi'], how='inner')
+func_co_cells = pd.merge(func_sub_table, coregistered_cells, on=['column', 'volume', 'plane', 'roi'], how='inner')
 final_co_table = pd.merge(func_co_cells, struc_data, on=['pt_root_id'], how='inner')
 
 #%% Correlation checking
-# SSI options are 'ssi', 'ssi_prefered_both', or 'ssi_orth'
-var_list = ["ssi_orth", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft"]
+# SSI options are 'ssi', 'ssi_pref_both', or 'ssi_orth'
+var_list = ["ssi", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft"]
 sub_df = final_co_table[var_list].copy().reset_index(drop=True)
-# # Check for NaNs in any values and drop those rows
+# Check for NaNs in any values and drop those rows
 sub_df.dropna(inplace=True)
 
 # Set layout for pairwise plot - 3 X 3 plot grid
@@ -64,6 +70,7 @@ g.map_diag(sns.kdeplot, hue=None, legend=False, bw_method = 'scott')
 # Formatting
 g.fig.set_size_inches(6,6)
 g.fig.tight_layout()
+plt.savefig(pjoin(fig_path, 'pairwise_density.png'), dpi=300, bbox_inches='tight')
 g.fig.show()
 
 corr_mat = pd.DataFrame(sub_df.corr())
@@ -72,11 +79,13 @@ sns.heatmap(corr_mat, annot=True, cmap='coolwarm', center=0,
             square=True, fmt='.3f')
 plt.title('Correlation Matrix Heatmap')
 plt.tight_layout()
+plt.savefig(pjoin(fig_path, 'corr_mat.png'), dpi=300, bbox_inches='tight')
 plt.show()
 
 # Create a pairplot to visualize relationships
 sns.pairplot(sub_df, diag_kind='hist')
 plt.suptitle('Pairwise Relationships', y=1.02)
+plt.savefig(pjoin(fig_path, 'pairplot.png'), dpi=300, bbox_inches='tight')
 plt.show()
 
 #%% Split into X and Y
@@ -141,6 +150,8 @@ axes[2].legend(coeff_df.columns, bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
 plt.show()
 
+fig.savefig(pjoin(fig_path, 'ols_cv_results.png'), dpi=300, bbox_inches='tight')
+
 #%% GLM Time baby
 # TODO: Need to change Poisson GLM to Beta or something else
 # Perform Poisson GLM cross-validation
@@ -150,18 +161,19 @@ print("=" * 50)
 cv_results = fit_beta_model_with_cv(X, y, cv_folds=5)
 
 # Calculate summary statistics
-cv_pseudo_r2_mean = np.mean(cv_results['pseudo_r2'])
-cv_pseudo_r2_std = np.std(cv_results['pseudo_r2'])
-cv_deviance_mean = np.mean(cv_results['deviance'])
-cv_deviance_std = np.std(cv_results['deviance'])
+cv_pseudo_r2_mean = cv_results["cv_summary"]['mean_pseudo_r2']
+cv_pseudo_r2_std = np.std(cv_results["cv_summary"]['std_pseudo_r2'])
+# cv_deviance_mean = np.mean(cv_results["cv_results"]['deviance'])
+# cv_deviance_std = np.std(cv_results["cv_results"]['deviance'])
 
 print(f"\nPoisson GLM Cross-Validation Summary:")
 print(f"Mean Pseudo R²: {cv_pseudo_r2_mean:.4f} ± {cv_pseudo_r2_std:.4f}")
-print(f"Mean Deviance: {cv_deviance_mean:.4f} ± {cv_deviance_std:.4f}")
-print(f"Mean AIC: {np.mean(cv_results['aic']):.4f} ± {np.std(cv_results['aic']):.4f}")
+# print(f"Mean Deviance: {cv_deviance_mean:.4f} ± {cv_deviance_std:.4f}")
+fold_info = pd.DataFrame(cv_results["cv_results"]["fold_info"])
+print(f"Mean AIC: {fold_info.model_aic.mean():.4f} ± {fold_info.model_aic.std():.4f}")
 
 # Average coefficients across folds
-coeff_array = np.array(cv_results['coefficients'])
+coeff_array = np.array(cv_results['cv_results']['coefficients'])
 mean_coeffs = np.mean(coeff_array, axis=0)
 std_coeffs = np.std(coeff_array, axis=0)
 
@@ -170,3 +182,14 @@ print(f"\nAverage Coefficients Across Folds:")
 for i, name in enumerate(param_names):
     exp_coeff = np.exp(mean_coeffs[i]) if name != 'const' else np.exp(mean_coeffs[i])
     print(f"{name}: {mean_coeffs[i]:.4f} ± {std_coeffs[i]:.4f} (exp: {exp_coeff:.4f})")
+
+# box plot of coefficient values, not including precision
+sns.boxplot(data=pd.DataFrame(coeff_array[:, :-1], columns=[param_names]), orient='h')
+plt.title('Average Coefficient Values Across Folds')
+plt.tight_layout()
+plt.savefig(pjoin(fig_path, 'glm_boxplot.png'), dpi=300, bbox_inches='tight')
+plt.show()
+
+# Plot beta results
+beta_fig, beta_axs = plot_beta_cv_results(cv_results)
+beta_fig.savefig(pjoin(fig_path, 'glm_cv_results.png'), dpi=300, bbox_inches='tight')
