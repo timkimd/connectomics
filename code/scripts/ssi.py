@@ -173,7 +173,7 @@ metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
 rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
 window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
 ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
-position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata_position.csv'))
+position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'window_positions.csv'))
 
 coreg_df = pd.read_feather(
     f"{data_dir}/metadata/coregistration_{mat_version}.feather"
@@ -211,15 +211,15 @@ for session in sessions:
 
 rf_cvpr_root_id = pd.concat(all_sess_root_ids)
 all_sess_rf = pd.merge(rf_cvpr_root_id, rf_metadata, on=['column', 'volume', 'plane', 'roi'])
-
+all_sess_rf_windows = pd.merge(all_sess_rf, position_metadata, on=['column', 'volume'])
+all_sess_rf_windows = all_sess_rf_windows[all_sess_rf_windows["has_rf_on_or_off"]==True]
 #%% find overlapping RFs and windows
-
-
-
-distance_squared = (point_x - circle_center_x)**2 + (point_y - circle_center_y)**2
-radius_squared = circle_radius**2
-
-return distance_squared <= radius_squared
+for every window location:
+    circle_radius = 15
+    circle center[x, y] = window(az, al)
+    radius_squared = circle_radius**2
+    distance_squared = (point_x - circle_center_x)**2 + (point_y - circle_center_y)**2
+    return distance_squared <= radius_squared
 
 # Example Usage:
 center_x = 0
