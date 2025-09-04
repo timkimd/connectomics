@@ -111,6 +111,7 @@ rf_metadata['volume'] = pd.to_numeric(rf_metadata['volume'], errors='coerce').as
 coreg_df = pd.read_feather(
     f"{data_dir}/metadata/coregistration_{mat_version}.feather"
 )
+coreg_df_unq = coreg_df.drop_duplicates(subset="pt_root_id")
 #%% find the RFs amd windows from metadata, map root_ids to column, volume, roi, plane
 sessions = pd.unique(stim_int_table.session_id)
 cvpr_map = []
@@ -134,7 +135,7 @@ all_sess_root_ids = []
 for session in sessions:
     cvpr = cvpr_df.loc[cvpr_df["session_id"] == session]
     sess_cvpr = cvpr.explode(["column", "volume", "plane", "roi"])
-    root_id = pd.merge(coreg_df, sess_cvpr)
+    root_id = pd.merge(coreg_df_unq, sess_cvpr)
     all_sess_root_ids.append(root_id)
 #%%
 rf_cvpr_root_id = pd.concat(all_sess_root_ids)
@@ -154,13 +155,13 @@ all_sess_rf_windows['rf_off_pos'] = all_sess_rf_windows['altitude_rf_off'].astyp
 all_sess_rf_windows["rf_in_window_on"] = (
     (all_sess_rf_windows["altitude_rf_on"] - all_sess_rf_windows["alt"])**2
   + (all_sess_rf_windows["azimuth_rf_on"]  - all_sess_rf_windows["azi"])**2
-) =< 15**2
+) <= 15**2
 
 all_sess_rf_windows["rf_in_window_off"] = (
     (all_sess_rf_windows["altitude_rf_off"] - all_sess_rf_windows["alt"])**2
   + (all_sess_rf_windows["azimuth_rf_off"]  - all_sess_rf_windows["azi"])**2
-) =< 15**2
-
+) <= 15**2
+#%%
 rf_in_windows = all_sess_rf_windows.query('rf_in_window_off==True or rf_in_window_on==True')
 rf_in_windows["pt_root_id"] = rf_in_windows["pt_root_id"].astype(int)
 #%%
@@ -185,11 +186,42 @@ plt.ylabel('altitude')
 
 
 #%%
+stim_min = stim_int_table[['session_id', 'column', 'volume', 'roi', 'plane']]
+stim_dff = pd.merge(dff_psth_table, stim_min, how='outer', on='session_id')
+stim_dff_df = pd.DataFrame(stim_dff)
+out_dir = "/root/capsule/scratch"
+os.makedirs(out_dir, exist_ok=True)
+out_path = os.path.join(out_dir, "stim_dff_table.pkl")
+stim_dff_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
+print(f"Saved to {out_path}")
+#%%
+sessions = stim_min.session_id.unique()
+all_sess_prs = []
+for session in stim_min.session_id.unique():
+    sess = stim_dff_df.loc[stim_dff_df["session_id"] == session]
+    sess_pr = sess.explode(["plane", "roi"]).reset_index(drop=True)
 
-dff_rf_df.groupby(session_id)
+    # per-session index: 0,1,2,3,... up to len(planes)-1
+    sess_pr["cell_idx"] = range(len(sess_pr))  # same as range(len(sess_pr["plane"]))
 
+    all_sess_prs.append(sess_pr[["session_id", "plane", "roi", "cell_idx"]])
 
+all_sess_prs_idx = pd.concat(all_sess_prs, ignore_index=True)
 
+#%%
+per_session = (
+    all_sess_prs_idx
+    .groupby("session_id", as_index=False)
+    .agg({
+        "plane": list,
+        "roi": list,
+        "cell_idx": list
+    })
+)
+
+#%%
+
+stim_dff_df_idx = pd.merge(stim_dff_df, per_session, on='session_id')
 
 
 
