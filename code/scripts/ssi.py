@@ -92,6 +92,114 @@ def get_trial_indices(base_times, trial):
     mask = (t >= start) & (t <= end)
     return np.where(mask)[0]
 
+#%%
+file_path = '/root/capsule/scratch/dff_psth_table.pkl'
+with open(file_path, 'rb') as file:
+    dff_psth_table = pickle.load(file)
+dff_psth_table
+
+#%% load metadata for RFs
+mat_version = 1196
+metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
+rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
+window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
+ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
+position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'window_positions.csv'))
+golden_mouse =  409828
+position_metadata_gold = position_metadata[position_metadata["mouse"] == golden_mouse]
+rf_metadata['volume'] = pd.to_numeric(rf_metadata['volume'], errors='coerce').astype('Int64')
+coreg_df = pd.read_feather(
+    f"{data_dir}/metadata/coregistration_{mat_version}.feather"
+)
+#%% find the RFs amd windows from metadata, map root_ids to column, volume, roi, plane
+sessions = pd.unique(stim_int_table.session_id)
+cvpr_map = []
+for session in sessions:
+    cvpr = stim_int_table.loc[stim_int_table["session_id"] == session]
+    column = (cvpr.column.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
+    volume = (cvpr.volume.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
+    plane = cvpr.plane.values[0]
+    roi = cvpr.roi.values[0]
+    cvpr_map.append({
+        "session_id": session,
+        "column": column,
+        "volume": volume,
+        "plane": plane, 
+        "roi": roi
+    }) 
+cvpr_df = pd.DataFrame(cvpr_map)
+
+#%%
+all_sess_root_ids = []
+for session in sessions:
+    cvpr = cvpr_df.loc[cvpr_df["session_id"] == session]
+    sess_cvpr = cvpr.explode(["column", "volume", "plane", "roi"])
+    root_id = pd.merge(coreg_df, sess_cvpr)
+    all_sess_root_ids.append(root_id)
+#%%
+rf_cvpr_root_id = pd.concat(all_sess_root_ids)
+
+#%%
+all_sess_rf = pd.merge(rf_cvpr_root_id, rf_metadata, on=['column', 'volume', 'plane', 'roi'])
+
+#%% need to sub_select position_metadata for golden mouse
+all_sess_rf_windows = pd.merge(all_sess_rf, position_metadata_gold, on=['column', 'volume'], how='outer')
+
+#%%
+all_sess_rf_windows = all_sess_rf_windows[all_sess_rf_windows["has_rf_on_or_off"]==True]
+all_sess_rf_windows['window_pos'] = all_sess_rf_windows['azi'].astype(str) + '_' + all_sess_rf_windows['alt'].astype(str)
+all_sess_rf_windows['rf_on_pos'] = all_sess_rf_windows['altitude_rf_on'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_on'].astype(str)
+all_sess_rf_windows['rf_off_pos'] = all_sess_rf_windows['altitude_rf_off'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_off'].astype(str)
+#%%
+all_sess_rf_windows["rf_in_window_on"] = (
+    (all_sess_rf_windows["altitude_rf_on"] - all_sess_rf_windows["alt"])**2
+  + (all_sess_rf_windows["azimuth_rf_on"]  - all_sess_rf_windows["azi"])**2
+) =< 15**2
+
+all_sess_rf_windows["rf_in_window_off"] = (
+    (all_sess_rf_windows["altitude_rf_off"] - all_sess_rf_windows["alt"])**2
+  + (all_sess_rf_windows["azimuth_rf_off"]  - all_sess_rf_windows["azi"])**2
+) =< 15**2
+
+rf_in_windows = all_sess_rf_windows.query('rf_in_window_off==True or rf_in_window_on==True')
+rf_in_windows["pt_root_id"] = rf_in_windows["pt_root_id"].astype(int)
+#%%
+x = position_metadata.azi 
+y = position_metadata.alt
+
+x1 = rf_in_windows.azi
+y1 = rf_in_windows.alt
+
+x2 = rf_in_windows.azimuth_rf_on
+y2 = rf_in_windows.altitude_rf_on
+
+x3 = rf_in_windows.azimuth_rf_off
+y3 = rf_in_windows.altitude_rf_off
+
+plt.scatter(x,y, label='all windows')
+plt.scatter(x1, y1, c='r', s=2**(30), alpha=0.003, label='golden windows')
+plt.scatter(x2, y2, c='g', s=4, label='rf on')
+plt.scatter(x3, y3, c='b', s=4, label='rf off')
+plt.xlabel('azimuth')
+plt.ylabel('altitude')
+
+
+#%%
+
+dff_rf_df.groupby(session_id)
+
+
+
+
+
+
+
+
+
+
+
+
+
 #%% 
 sessions = pd.unique(stim_int_table.session_id)
 stim_traces = []
@@ -134,6 +242,7 @@ for session in sessions:
             "psth_chop": psth_chop,
             "mean_chop": psth_chop_mean
         })
+
 #%%
 traces_df = pd.DataFrame(stim_traces)
 out_dir = "/root/capsule/scratch"
@@ -141,86 +250,6 @@ os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, "dff_psth_table.pkl")
 traces_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
-
-#%%
-file_path = '/root/capsule/scratch/dff_psth_table.pkl'
-with open(file_path, 'rb') as file:
-    dff_psth_table = pickle.load(file)
-dff_psth_table
-
-#%% load metadata for RFs
-mat_version = 1196
-metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
-rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
-window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
-ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
-position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'window_positions.csv'))
-
-coreg_df = pd.read_feather(
-    f"{data_dir}/metadata/coregistration_{mat_version}.feather"
-)
-#%% find the RFs amd windows from metadata, map root_ids to column, volume, roi, plane
-sessions = pd.unique(stim_int_table.session_id)
-cvpr_map = []
-for session in sessions:
-    cvpr = stim_int_table.loc[stim_int_table["session_id"] == session]
-    column = (cvpr.column.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
-    volume = (cvpr.volume.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
-    plane = cvpr.plane.values[0]
-    roi = cvpr.roi.values[0]
-    cvpr_map.append({
-        "session_id": session,
-        "column": column,
-        "volume": volume,
-        "plane": plane, 
-        "roi": roi
-    }) 
-cvpr_df = pd.DataFrame(cvpr_map)
-#%%
-rf_metadata['volume'] = pd.to_numeric(rf_metadata['volume'], errors='coerce').astype('Int64')
-#%%
-all_sess_root_ids = []
-for session in sessions:
-    cvpr = cvpr_df.loc[cvpr_df["session_id"] == session]
-    sess_cvpr = cvpr.explode(["column", "volume", "plane", "roi"])
-    root_id = pd.merge(coreg_df, sess_cvpr)
-    all_sess_root_ids.append(root_id)
-
-rf_cvpr_root_id = pd.concat(all_sess_root_ids)
-all_sess_rf = pd.merge(rf_cvpr_root_id, rf_metadata, on=['column', 'volume', 'plane', 'roi'])
-all_sess_rf_windows = pd.merge(all_sess_rf, position_metadata, on=['column', 'volume'], how='outer')
-all_sess_rf_windows = all_sess_rf_windows[all_sess_rf_windows["has_rf_on_or_off"]==True]
-all_sess_rf_windows['window_pos'] = all_sess_rf_windows['azi'].astype(str) + '_' + all_sess_rf_windows['alt'].astype(str)
-all_sess_rf_windows['rf_on_pos'] = all_sess_rf_windows['altitude_rf_on'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_on'].astype(str)
-all_sess_rf_windows['rf_off_pos'] = all_sess_rf_windows['altitude_rf_off'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_off'].astype(str)
-
-all_sess_rf_windows["rf_in_window_on"] = (
-    (all_sess_rf_windows["altitude_rf_on"] - all_sess_rf_windows["alt"])**2
-  + (all_sess_rf_windows["azimuth_rf_on"]  - all_sess_rf_windows["azi"])**2
-) < 15**2
-
-all_sess_rf_windows["rf_in_window_off"] = (
-    (all_sess_rf_windows["altitude_rf_off"] - all_sess_rf_windows["alt"])**2
-  + (all_sess_rf_windows["azimuth_rf_off"]  - all_sess_rf_windows["azi"])**2
-) < 15**2
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #%%
