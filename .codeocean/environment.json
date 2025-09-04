@@ -8,6 +8,23 @@
 		"mount_secrets": true
 	},
 	"installers": {
+		"apt": {
+			"packages": [
+				{
+					"name": "texlive-fonts-extra"
+				},
+				{
+					"name": "texlive-fonts-recommended"
+				},
+				{
+					"name": "texlive-latex-base"
+				},
+				{
+					"name": "texlive-latex-extra"
+				}
+			],
+			"install_software_properties_common": true
+		},
 		"pip": {
 			"packages": [
 				{
