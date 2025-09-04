@@ -87,9 +87,6 @@ def get_stimulus_mask(sections, base_times):
         mask |= (t >= float(start)) & (t <= float(end))
     return mask
 #%%
-trial_sections = [(s, e) for s, e in zip(stim_int_df["start_time"], stim_int_df["stop_time"])]
-stim = pd.unique(stim_int_df.stim_name)
-#%%
 def get_trial_sections(stim_int_df, stim_name):
     """Return (start, stop) sections for all trials of a given stim_name."""
     df = stim_int_df.loc[stim_int_df["stim_name"] == stim_name]
@@ -106,11 +103,7 @@ def get_trial_indices(base_times, trial):
     start, end = map(float, trial)
     mask = (t >= start) & (t <= end)
     return np.where(mask)[0]
-#%% chop dff for every trial, then take an average of the response during a trial type
 
-t = _to_1d_float_array(base_times)  # compute once
-dff_obj = this_session.dff.iloc[0]
-stim_name = 'drifting_gratings_windowed'
 #%% 
 sessions = pd.unique(stim_int_table.session_id)
 stim_traces = []
@@ -178,10 +171,7 @@ position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'window_posit
 coreg_df = pd.read_feather(
     f"{data_dir}/metadata/coregistration_{mat_version}.feather"
 )
-
-
 #%% find the RFs from metadata, overlay with windows, which are 30 deg diameter
-
 # map root_ids to column, volume, roi, plane
 sessions = pd.unique(stim_int_table.session_id)
 cvpr_map = []
@@ -211,9 +201,20 @@ for session in sessions:
 
 rf_cvpr_root_id = pd.concat(all_sess_root_ids)
 all_sess_rf = pd.merge(rf_cvpr_root_id, rf_metadata, on=['column', 'volume', 'plane', 'roi'])
-all_sess_rf_windows = pd.merge(all_sess_rf, position_metadata, on=['column', 'volume'])
+all_sess_rf_windows = pd.merge(all_sess_rf, position_metadata, on=['column', 'volume'], how='outer')
 all_sess_rf_windows = all_sess_rf_windows[all_sess_rf_windows["has_rf_on_or_off"]==True]
+all_sess_rf_windows['window_pos'] = all_sess_rf_windows['azi'].astype(str) + '_' + all_sess_rf_windows['alt'].astype(str)
+all_sess_rf_windows['rf_on_pos'] = all_sess_rf_windows['altitude_rf_on'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_on'].astype(str)
+all_sess_rf_windows['rf_off_pos'] = all_sess_rf_windows['altitude_rf_off'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_off'].astype(str)
+
 #%% find overlapping RFs and windows
+pos_groups = all_sess_rf_windows.groupby('window_pos')
+for win_pos in all_sess_rf_windows.groupby(['window_pos']):
+    circle_radius = 15
+    radius_squared = circle_radius**2
+    print(win_pos.head())
+
+#%%
 for every window location:
     circle_radius = 15
     circle center[x, y] = window(az, al)

@@ -138,13 +138,13 @@ out_path = os.path.join(out_dir, "stim_int_table.pkl")
 df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
 
-#%%
+#%% to load your pickle
 file_path = '/root/capsule/scratch/stim_int_table.pkl'
 with open(file_path, 'rb') as file:
     stim_int_table = pickle.load(file)
 stim_int_table
 
-#%%
+#%% example for loading one session at a time for validation
 session_dir = '/root/capsule/data/409828_V1DD_GoldenMouse/409828_2018-11-06_14-02-59_nwb_2025-08-08_16-27-52'
 nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
 nwb_path = os.path.join(session_dir, nwb_file)
