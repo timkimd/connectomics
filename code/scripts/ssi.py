@@ -221,7 +221,7 @@ per_session = (
 
 #%%
 
-stim_dff_df_idx = pd.merge(stim_dff_df, per_session, on='session_id')
+stim_dff_df_idx = pd.merge(stim_dff_df, per_session, on='session_id', how='inner')
 
 
 

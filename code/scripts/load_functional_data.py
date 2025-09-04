@@ -31,6 +31,11 @@ from data_io import _get_data_dir
 data_dir = '/data/'
 metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
 
+coreg_df = pd.read_feather(
+    f"{data_dir}/metadata/coregistration_{mat_version}.feather"
+)
+coreg_df_unq = coreg_df.drop_duplicates(subset="pt_root_id")
+
 #%% get the session list for one animal
 def get_sessions(mouse_id, data_dir):
     mouse_dir = glob.glob((os.path.join(data_dir, mouse_id+'*')))[0]
@@ -49,12 +54,15 @@ def interp_across_planes(nwbfile, column, volume, remove_known_bad_planes=True):
     dff_traces = []
     planes_traces = []
     roi_traces = []
-
+    column_traces = []
+    volume_traces = []
+    coreg_cvpr = {}
     base_times = nwbfile.processing["plane-0"].data_interfaces["dff"].timestamps
     for plane in planes:
         rois = nwbfile.processing[f"plane-{plane}"].data_interfaces["image_segmentation"]["roi_table"][:]
         good_rois = rois[rois.is_soma==True].roi.values
         print(f'good ROIs in {plane} = {len(good_rois)}')
+        print(good_rois)
         traces_xarray = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].data[:,good_rois]
         timestamps = nwbfile.processing[f"plane-{plane}"].data_interfaces["dff"].timestamps[:]
         f_interp = interpolate.interp1d(timestamps, traces_xarray, 
@@ -62,12 +70,23 @@ def interp_across_planes(nwbfile, column, volume, remove_known_bad_planes=True):
         dff_traces.extend(f_interp(base_times).T)
         roi_traces.extend(good_rois)
         planes_traces.extend([plane]* len(good_rois))
+        column_traces.extend([column]* len(good_rois))
+        volume_traces.extend([volume]* len(good_rois))
 
     dff_traces = np.array(dff_traces)
     planes_traces = np.array(planes_traces)
     roi_traces = np.array(roi_traces)
-    
-    return {
+    column_traces = np.array(column_traces)
+    volume_traces = np.array(volume_traces)
+
+    coreg_cvpr = {
+        "column": column_traces,
+        "volume": volume_traces,
+        "plane": planes_traces,
+        "roi": roi_traces,
+    }
+
+    return coreg_cvpr, {
         "dff": dff_traces,
         "plane": planes_traces,
         "roi": roi_traces,
@@ -94,7 +113,7 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
             sessions = [sessions]
 
     cell_df = []
-    
+    coreg_root_ids = []
     for k, mouse in enumerate(tqdm.tqdm(mouse_ids, leave=False, desc='mouse_ids')):
         mouse_dir = glob.glob(os.path.join(data_dir, mouse + '*'))[0]
         use_sessions = get_sessions(mouse, data_dir) if sessions is None else list(sessions)
@@ -117,8 +136,15 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
             stim_int_table = pull_interval_info(nwbfile)
             stim_int_cols = ["stim_name", "start_time", "stop_time","temporal_frequency","spatial_frequency","direction","frame","image_order","image_index","stimulus_condition_id"]
             stim_int_lists = {c: stim_int_table[c].tolist() for c in stim_int_cols}
-
-            interp = interp_across_planes(nwbfile, column, volume, remove_known_bad_planes=True)
+            coreg_cvpr, interp = interp_across_planes(nwbfile, column, volume, remove_known_bad_planes=True)
+            
+            coreg_root_ids.append({
+                **coreg_cvpr
+                    })
+            coreg_cvpr = pd.DataFrame(coreg_cvpr)
+            coreg_cvpr_merge = pd.merge(coreg_cvpr, coreg_df)
+            print(f'coreg merge: {coreg_cvpr_merge}')
+            
             cell_df.append({
                     "mouse_id": mouse,
                     "session_id": session,
@@ -128,7 +154,7 @@ def pre_process(mouse_ids=None, sessions=None, data_dir = '/data/'):
                     **stim_int_lists
             })
             print(f'added {session} to cell_df')
-    return pd.DataFrame(cell_df)
+    return pd.DataFrame(cell_df), coreg_cvpr_merge
 
 #%%
 df = pd.DataFrame(stim_interval_df) 
