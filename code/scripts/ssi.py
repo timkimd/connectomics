@@ -38,18 +38,6 @@ with open(file_path, 'rb') as file:
 stim_int_table
 
 #%%
-session = '409828_2018-11-06_14-02-59_nwb_2025-08-08_16-27-52'
-this_session = stim_int_table[stim_int_table['session_id']==session]
-base_times = this_session.base_time
-#%%
-stim_int_df = pd.DataFrame({
-    "stim_name":  this_session.stim_name,
-    "start_time": this_session.start_time,
-    "stop_time":  this_session.stop_time,
-})
-stim_int_df = stim_int_df.explode(["stim_name", "start_time", "stop_time"], ignore_index=True)
-
-#%%
 def get_stimulus_sections(stim_int_df, threshold=1.1):
     starts = stim_int_df["start_time"].values
     ends = stim_int_df["stop_time"].values
@@ -171,8 +159,7 @@ position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'window_posit
 coreg_df = pd.read_feather(
     f"{data_dir}/metadata/coregistration_{mat_version}.feather"
 )
-#%% find the RFs from metadata, overlay with windows, which are 30 deg diameter
-# map root_ids to column, volume, roi, plane
+#%% find the RFs amd windows from metadata, map root_ids to column, volume, roi, plane
 sessions = pd.unique(stim_int_table.session_id)
 cvpr_map = []
 for session in sessions:
@@ -207,31 +194,15 @@ all_sess_rf_windows['window_pos'] = all_sess_rf_windows['azi'].astype(str) + '_'
 all_sess_rf_windows['rf_on_pos'] = all_sess_rf_windows['altitude_rf_on'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_on'].astype(str)
 all_sess_rf_windows['rf_off_pos'] = all_sess_rf_windows['altitude_rf_off'].astype(str) + '_' + all_sess_rf_windows['azimuth_rf_off'].astype(str)
 
-#%% find overlapping RFs and windows
-pos_groups = all_sess_rf_windows.groupby('window_pos')
-for win_pos in all_sess_rf_windows.groupby(['window_pos']):
-    circle_radius = 15
-    radius_squared = circle_radius**2
-    print(win_pos.head())
+all_sess_rf_windows["rf_in_window_on"] = (
+    (all_sess_rf_windows["altitude_rf_on"] - all_sess_rf_windows["alt"])**2
+  + (all_sess_rf_windows["azimuth_rf_on"]  - all_sess_rf_windows["azi"])**2
+) < 15**2
 
-#%%
-for every window location:
-    circle_radius = 15
-    circle center[x, y] = window(az, al)
-    radius_squared = circle_radius**2
-    distance_squared = (point_x - circle_center_x)**2 + (point_y - circle_center_y)**2
-    return distance_squared <= radius_squared
-
-# Example Usage:
-center_x = 0
-center_y = 0
-radius = 5
-
-point1_x, point1_y = 3, 4  # Inside the circle (distance = 5, on the edge)
-point2_x, point2_y = 6, 1  # Outside the circle (distance > 5)
-point3_x, point3_y = 1, 1  # Inside the circle (distance < 5)
-
-
+all_sess_rf_windows["rf_in_window_off"] = (
+    (all_sess_rf_windows["altitude_rf_off"] - all_sess_rf_windows["alt"])**2
+  + (all_sess_rf_windows["azimuth_rf_off"]  - all_sess_rf_windows["azi"])**2
+) < 15**2
 
  
 
