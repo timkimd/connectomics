@@ -32,10 +32,10 @@ data_dir = '/data/'
 metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
 
 #%% load stim_int_df
-file_path = '/root/capsule/scratch/stim_int_table.pkl'
+file_path = '/root/capsule/scratch/coreg_stim_int.pkl'
 with open(file_path, 'rb') as file:
-    stim_int_table = pickle.load(file)
-stim_int_table
+    coreg_stim_int = pickle.load(file)
+coreg_stim_int
 
 #%%
 def get_stimulus_sections(stim_int_df, threshold=1.1):
@@ -93,10 +93,10 @@ def get_trial_indices(base_times, trial):
     return np.where(mask)[0]
 
 #%%
-file_path = '/root/capsule/scratch/dff_psth_table.pkl'
+file_path = '/root/capsule/scratch/coreg_dff_psth_table.pkl'
 with open(file_path, 'rb') as file:
-    dff_psth_table = pickle.load(file)
-dff_psth_table
+    coreg_dff_psth_table = pickle.load(file)
+coreg_dff_psth_table
 
 #%% load metadata for RFs
 mat_version = 1196
@@ -233,23 +233,27 @@ stim_dff_df_idx = pd.merge(stim_dff_df, per_session, on='session_id', how='inner
 
 
 #%% 
-sessions = pd.unique(stim_int_table.session_id)
+# remove empty sessions first
+coreg_stim_int = coreg_stim_int[coreg_stim_int['pt_root_id'].apply(lambda x: len(x) > 0)]
+
+#%%
+sessions = pd.unique(coreg_stim_int.session_id)
 stim_traces = []
 for session in sessions:
-    this_session = stim_int_table[stim_int_table['session_id']==session]
+    this_session = coreg_stim_int[coreg_stim_int['session_id']==session]
     base_times = this_session.base_time
     t = _to_1d_float_array(base_times) 
     dff_obj = this_session.dff.iloc[0]  
 
-    stim_int_df = pd.DataFrame({
+    coreg_stim_df = pd.DataFrame({
         "stim_name":  this_session.stim_name,
         "start_time": this_session.start_time,
         "stop_time":  this_session.stop_time,
     })
-    stim_int_df = stim_int_df.explode(["stim_name", "start_time", "stop_time"], ignore_index=True)
+    coreg_stim_df = coreg_stim_df.explode(["stim_name", "start_time", "stop_time"], ignore_index=True)
 
     for stim_name in ['drifting_gratings_windowed' , 'drifting_gratings_full']:
-        stim_sections = get_trial_sections(stim_int_df, stim_name)
+        stim_sections = get_trial_sections(coreg_stim_df, stim_name)
 
         trial_dff_traces = []
         for trial in stim_sections:
@@ -276,13 +280,14 @@ for session in sessions:
         })
 
 #%%
-traces_df = pd.DataFrame(stim_traces)
+coreg_traces_df = pd.DataFrame(stim_traces)
 out_dir = "/root/capsule/scratch"
 os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, "dff_psth_table.pkl")
-traces_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
+out_path = os.path.join(out_dir, "coreg_dff_psth_table.pkl")
+coreg_traces_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
 
+big_table = pd.merge(coreg_stim_int, coreg_traces_df, how='outer', on='session_id')
 
 #%%
 nwb_file = [file for file in os.listdir(session_dir) if 'nwb' in file][0]
