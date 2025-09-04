@@ -106,7 +106,7 @@ def pull_interval_info(nwbfile):
 
 #%%
 
-def pre_process(mouse_ids=None, sessions=None, coreg_df=coreg_df, data_dir='/data/'):
+def pre_process(mouse_ids=None, sessions=None, coreg_df=coreg_df_unq, data_dir='/data/'):
     if mouse_ids is None:
         mouse_ids = ['409828']
     if sessions is not None and not isinstance(sessions, (list, tuple)):
