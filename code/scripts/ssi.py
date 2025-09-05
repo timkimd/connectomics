@@ -210,6 +210,17 @@ cell_rf = pd.merge(coreg_sess_cells, rf_metadata, on=['column', 'volume', 'plane
 #%% need to sub_select position_metadata for golden mouse, drop nans
 cell_rf_windows = pd.merge(cell_rf, position_metadata_gold, on=['column', 'volume'], how='outer')
 cell_rf_windows = cell_rf_windows.dropna(subset=['session_id'])
+# save here for non ssi but all coreg, use these to compare to ssi cells
+
+out_dir = "/root/capsule/scratch"
+os.makedirs(out_dir, exist_ok=True)
+out_path = os.path.join(out_dir, "cell_coreg.feather")
+coreg_feather = cell_rf_windows.to_feather(out_path)
+print(f"Saved to {out_path}")
+
+#%% to read
+cell_coreg_df = pd.read_feather(out_path)
+
 #%%
 cell_rf_windows = cell_rf_windows[cell_rf_windows["has_rf_on_or_off"]==True]
 cell_rf_windows['window_pos'] = cell_rf_windows['azi'].astype(str) + '_' + cell_rf_windows['alt'].astype(str)
