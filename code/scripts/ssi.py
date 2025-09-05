@@ -229,12 +229,16 @@ coreg_traces_dir_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
 
 #%% merge the dff mean traces with the metadata
-big_table = pd.merge(coreg_stim_int, coreg_dff_psth_table, how='outer', on='session_id')
+coreg_stim_int = coreg_stim_int.drop(columns=['stim_name', 'direction'])
+
+big_table = pd.merge(coreg_stim_int, coreg_dff_psth_dir_table, how='outer', on='session_id')
+
+#%%
 cell_table = big_table[['session_id', 'pt_root_id', 'combined_name', 'mean_chop', 'plane', 'roi']]
 
 for n in range(len(cell_table)):
-    cell_table.at[n, 'stimulus'] = np.repeat(
-        cell_table.at[n, 'stimulus'],
+    cell_table.at[n, 'combined_name'] = np.repeat(
+        cell_table.at[n, 'combined_name'],
         len(cell_table.at[n, 'pt_root_id']))
 cell_table = pd.DataFrame(cell_table)
 
@@ -266,10 +270,11 @@ cell_table = pd.DataFrame(cell_table)
 #%%
 coreg_sess_cells = cell_table.explode(
     ["session_id", "column", "volume", "pt_root_id", 
-     "stimulus", "mean_chop", "plane", "roi"]
+     "combined_name", "mean_chop", "plane", "roi"]
 )
 
 #%%
+rf_metadata.drop(columns=['mouse'])
 cell_rf = pd.merge(coreg_sess_cells, rf_metadata, on=['column', 'volume', 'plane', 'roi'])
 
 #%% need to sub_select position_metadata for golden mouse, drop nans
@@ -302,12 +307,12 @@ cell_rf_windows["rf_in_window_off"] = (
   + (cell_rf_windows["azimuth_rf_off"]  - cell_rf_windows["azi"])**2
 ) <= 15**2
 
-#%% get SSI
+#%% get SSI ###FIX from here
 rows = []
 for pt_root_id, g in cell_rf_windows.groupby('pt_root_id'):
     # pick the rows for each stimulus within this neuron's group
-    w = g.loc[g['stimulus'] == 'drifting_gratings_windowed', 'mean_chop']
-    f = g.loc[g['stimulus'] == 'drifting_gratings_full', 'mean_chop']
+    w = g.loc[g['combined_name'] == 'drifting_gratings_windowed', 'mean_chop']
+    f = g.loc[g['combined_name'] == 'drifting_gratings_full', 'mean_chop']
     if w.empty or f.empty:
         continue  # skip if one stimulus is missing
     window = w.iloc[0]
