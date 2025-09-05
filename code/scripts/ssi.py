@@ -29,6 +29,7 @@ from data_io import _get_data_dir
 
 # get metadata
 data_dir = '/data/'
+scratch_dir = '/scratch/'
 mat_version = 1196
 metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
 rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
@@ -55,8 +56,6 @@ file_path = '/root/capsule/scratch/coreg_dff_psth_table.pkl'
 with open(file_path, 'rb') as file:
     coreg_dff_psth_table = pickle.load(file)
 coreg_dff_psth_table
-
-
 
 #%%
 def get_stimulus_sections(stim_int_df, threshold=1.1):

@@ -1,18 +1,10 @@
-# hash:sha256:b097e8a8fe975aae6b16708182c599cc32617363df40b88b46db29fd5dc38b08
+# hash:sha256:7894f8117a0e54b91e0eb12fa4f4eaf98eac6f84c108f0556857778259a785c8
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GIT_ASKPASS
 COPY git-askpass /
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        texlive-fonts-extra \
-        texlive-fonts-recommended \
-        texlive-latex-base \
-        texlive-latex-extra \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -U --no-cache-dir \
     aind-data-access-api==1.2.1 \

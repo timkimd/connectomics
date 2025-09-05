@@ -30,6 +30,7 @@ from data_io import _get_data_dir
 #%%
 # get metadata
 data_dir = '/data/'
+scratch_dir = '/scratch/'
 mat_version = 1196
 golden_mouse =  409828
 metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
@@ -44,44 +45,22 @@ coreg_df_unq = coreg_df.drop_duplicates(subset="pt_root_id")
 e_to_i = pd.read_feather(f"{scratch_dir}/E_to_I.feather")
 i_to_e = pd.read_feather(f"{scratch_dir}/I_to_E.feather")
 struc_df = pd.read_feather(f"{scratch_dir}/structural_data.feather")
-#%%
-## setup figure aesthetics
-mpl.rcParams.update({
-    #'text.usetex': True,
-    'font.family': 'sans-serif',
-    'font.sans-serif': ['Helvetica'],
-    'pdf.fonttype': 42,
-    'ps.fonttype': 42,
-    'font.size': 8,
-    'axes.titlesize': 9,
-    'axes.labelsize': 8,
-    'xtick.labelsize': 7,
-    'ytick.labelsize': 7,
-    'legend.fontsize': 7,
-    'legend.title_fontsize': 8,
-    'axes.linewidth': 0.5,
-    'xtick.major.width': 0.5,
-    'ytick.major.width': 0.5,
-    'xtick.minor.width': 0.4,
-    'ytick.minor.width': 0.4,
-    'xtick.direction': 'out',
-    'ytick.direction': 'out',
-    'axes.spines.top': False,
-    'axes.spines.right': False,
-    'axes.edgecolor': 'black',
-    'savefig.dpi': 600,
-    'figure.dpi': 300,
-    'figure.figsize': (12, 4),
-    'figure.constrained_layout.use': False,
-    #'text.latex.preamble': r'\renewcommand{\familydefault}{\sfdefault} \usepackage[helvet]{sfmath}'
-})
-
-from matplotlib import rcParams, font_manager
-from matplotlib.lines import Line2D
-from matplotlib.legend_handler import HandlerBase, HandlerTuple
-font_kwargs = {'fontsize': rcParams['font.size'], 'family': rcParams['font.sans-serif'][0]}
+cell_ssi_df = pd.read_feather(f"{scratch_dir}/cell_ssi.feather")
 
 #%% plotting RFs and Window locations
+
+x = position_metadata.azi 
+y = position_metadata.alt
+
+x1 = cell_ssi_df.azi
+y1 = cell_ssi_df.alt
+
+x2 = cell_ssi_df.azimuth_rf_on
+y2 = cell_ssi_df.altitude_rf_on
+
+x3 = cell_ssi_df.azimuth_rf_off
+y3 = cell_ssi_df.altitude_rf_off
+
 fig, ax = plt.subplots()
 ax.scatter(x, y, c='k', label='all windows')
 ax.scatter(x1, y1, c='r', s=5, label='golden windows')
@@ -93,4 +72,25 @@ ax.set_ylim(-50, 50)
 ax.set_xlabel('azimuth')
 ax.set_ylabel('altitude')
 ax.legend()
+plt.show()
+
+#%%
+
+struc_func_df = pd.merge(struc_df, cell_ssi_df, on='pt_root_id', how='inner')
+df.rename(columns={'A': 'Alpha'})
+i_to_e.rename(columns={"post_pt_root_id": "pt_root_id"})
+i_to_ssi = pd.merge(i_to_e, cell_ssi_df, on='pt_root_id', how='inner')
+
+#%% plot ssi by layer
+plt.figure(figsize=(8,6))
+sns.boxplot(
+    data=struc_func_df, 
+    x="cell_type",
+    y="ssi",
+    palette="Set2"
+)
+
+plt.title("SSI by Cell Type")
+plt.xlabel("Cell Type")
+plt.ylabel("SSI")
 plt.show()
