@@ -610,14 +610,25 @@ def parameter_recovery_test(synthetic_data, true_params):
         beta = (1 - link_func_vals) * estimated_coeffs[-1]
         estimated_coeffs = np.insert(estimated_coeffs, -1, [alpha.mean(), beta.mean()])
 
-        # TODO: Finish binning ssis and plotting the ssis vs the mean bins
-        # Get bins of linear_comb values and then calculate means for estimated_ssis in those bins
-        counts, bin_edges, patches = plt.hist(linear_comb, bins=10)
-
-        # Use bin_edges to slice estimated_ssis into bins and take mean values
-
-        binned_ssis = 0
-
+        df = pd.DataFrame({
+            'linear_comb': linear_comb,
+            'estimated_ssis': estimated_ssis
+        })
+        # Create bins and bin the data
+        df['bin'] = pd.cut(df['linear_comb'], bins=10, include_lowest=True)
+        # Calculate binned statistics
+        binned_stats = df.groupby('bin')['estimated_ssis'].agg(['mean', 'std', 'count', 'sem']).reset_index()
+        binned_stats['bin_center'] = binned_stats['bin'].apply(lambda x: x.mid)
+        # Plot
+        plt.figure(figsize=(10, 6))
+        plt.errorbar(binned_stats['bin_center'], binned_stats['mean'],
+                     yerr=binned_stats['sem'], fmt='o-', markersize=8, capsize=5)
+        plt.xlabel('mu')
+        plt.ylabel('Mean Estimated SSIs')
+        plt.title('Binned Mean Estimated SSIs')
+        plt.grid(True, alpha=0.3)
+        plt.show()
+        print(binned_stats[['bin_center', 'mean', 'count']])
 
     except Exception as e:
         print(f"Model fitting failed recovery: {e}")
@@ -635,5 +646,3 @@ def parameter_recovery_test(synthetic_data, true_params):
         recovery_results['relative_error'].append(rel_error)
 
     return pd.DataFrame(recovery_results), true_values
-
-

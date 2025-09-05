@@ -21,7 +21,7 @@ np.random.seed(42)
 #%% Load in test metric info for structural data and example func data
 metadata = pd.read_csv(os.path.join(data_root, 'v1dd_1196/V1DD_metadata.csv'))
 # struc_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/joint_clustering_feat_df_v1dd.feather'))
-struc_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/structurarl_data.feather'))
+struc_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/structural_data.feather'))
 # func_data = pd.read_csv(pjoin(data_root, 'v1dd_1196/surround_supression_index_M409828.csv'))
 func_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/cell_ssi.feather'))
 coregistered_cells = pd.read_feather(pjoin(data_root, 'v1dd_1196/coregistration_1196.feather'))
@@ -30,9 +30,6 @@ coregistered_cells = pd.read_feather(pjoin(data_root, 'v1dd_1196/coregistration_
 func_sub_table = func_data[['ssi', 'column', 'volume', 'plane', 'roi', 'pt_root_id']]
 func_sub_table['volume'] = pd.to_numeric(func_sub_table['volume'], errors='coerce').astype('Int64')
 func_sub_table.dropna(inplace=True)
-
-for col in ["dtc_num_connections", "tc_num_connections", "ptc_num_connections",]:
-    struc_data[col+"_vol_norm"] = struc_data[col]/struc_data["volume"]
 
 # Renaming column from root_id to pt_root_id
 if "root_id" in struc_data.columns:
@@ -43,11 +40,20 @@ if "root_id" in struc_data.columns:
 func_co_cells = pd.merge(func_sub_table, coregistered_cells, on=["pt_root_id"], how='inner')
 final_co_table = pd.merge(func_co_cells, struc_data, on=['pt_root_id'], how='inner')
 
+#%% Additional column calcs
+for col in ["dtc_num_connections", "itc_num_connections", "ptc_num_connections",]:
+    inhib_type = col.split("_")[0]
+    final_co_table[col+"_vol_norm"] = final_co_table[col]/final_co_table["volume"]
+    final_co_table[col+"_strength_norm"] = final_co_table[col]/final_co_table[f"{inhib_type}_sum_size"]
+
+sub_df = final_co_table.drop(columns=final_co_table.columns[1:10])
+sub_df = sub_df.drop(columns="cell_type").reset_index(drop=True)
+
 #%% Correlation checking
 # SSI options are 'ssi', 'ssi_pref_both', or 'ssi_orth'
 # var_list = ["ssi", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft", "soma_depth"]
-var_list = ["ssi", "dtc_num_connections_vol_norm", "tc_num_connections_vol_norm", "ptc_num_connections_vol_norm", ]
-sub_df = final_co_table[var_list].copy().reset_index(drop=True)
+var_list = sub_df.columns.tolist()
+# sub_df = final_co_table[var_list].copy().reset_index(drop=True)
 # Check for NaNs in any values and drop those rows
 sub_df.dropna(inplace=True)
 
@@ -68,13 +74,13 @@ g.map_upper(hide_current_axis)
 g.map_diag(sns.kdeplot, hue=None, legend=False, bw_method = 'scott')
 
 # Formatting
-g.fig.set_size_inches(6,6)
+g.fig.set_size_inches(24,24)
 g.fig.tight_layout()
 plt.savefig(pjoin(fig_path, 'pairwise_density.png'), dpi=300, bbox_inches='tight')
 g.fig.show()
 
 corr_mat = pd.DataFrame(sub_df.corr())
-plt.figure(figsize=(8, 6))
+plt.figure(figsize=(24, 24))
 sns.heatmap(corr_mat, annot=True, cmap='coolwarm', center=0,
             square=True, fmt='.3f')
 plt.title('Correlation Matrix Heatmap')
@@ -83,13 +89,13 @@ plt.savefig(pjoin(fig_path, 'corr_mat.png'), dpi=300, bbox_inches='tight')
 plt.show()
 
 # Create a pairplot to visualize relationships
-sns.pairplot(sub_df, diag_kind='hist')
-plt.suptitle('Pairwise Relationships', y=1.02)
-plt.savefig(pjoin(fig_path, 'pairplot.png'), dpi=300, bbox_inches='tight')
-plt.show()
+# sns.pairplot(sub_df, diag_kind='hist')
+# plt.suptitle('Pairwise Relationships', y=1.02)
+# plt.savefig(pjoin(fig_path, 'pairplot.png'), dpi=300, bbox_inches='tight')
+# plt.show()
 
 #%% Split into X and Y
-X = sub_df[var_list[1:]]
+X = sub_df[np.array(var_list)[np.array([3, 12, 14, 16])]]
 y = sub_df[var_list[0]]
 
 #%% OLS model fitting
