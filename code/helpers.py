@@ -13,6 +13,8 @@ from sklearn.model_selection import KFold
 from statsmodels.genmod.families import Poisson
 from statsmodels.genmod.families.links import Log
 
+import sys
+
 def OLS_CV(X, y, cv_folds=5, random_state=42):
     """
     Detailed cross-validation with comprehensive statistics
@@ -130,7 +132,7 @@ def poisson_glm_cv(X, y, cv_folds=5, random_state=42):
     return cv_results, y_poisson
 
 def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_formula=None,
-                           transform_to_unit=True, epsilon=1e-6, cv_folds=5, random_state=42):
+                           transform_to_unit=True, epsilon=1e-6, cv_folds=5, random_state=42, verbose=True):
     """
     Fit a Beta regression model using statsmodels BetaModel with cross-validation
 
@@ -154,6 +156,8 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
         Number of cross-validation folds
     random_state : int, default=42
         Random seed for reproducibility
+    verbose : bool, default=True
+        Whether or not print statements go
 
     Returns:
     --------
@@ -178,7 +182,8 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
 
     if transform_to_unit:
         if y.min() < 0 or y.max() > 1:
-            print(f"Transforming y from [{y.min():.3f}, {y.max():.3f}] to (0,1)")
+            if verbose:
+                print(f"Transforming y from [{y.min():.3f}, {y.max():.3f}] to (0,1)")
             y_beta = (y - y.min()) / (y.max() - y.min())
 
     # Ensure y is strictly between 0 and 1
@@ -188,11 +193,13 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
     if formula is None:
         predictor_names = X_const.columns.tolist()
         formula = f"y ~ {' + '.join(predictor_names)}"
-        print(f"Auto-generated formula: {formula}")
+        if verbose:
+            print(f"Auto-generated formula: {formula}")
 
     # Perform Cross-Validation
-    print(f"\nPerforming {cv_folds}-fold cross-validation...")
-    print("=" * 50)
+    if verbose:
+        print(f"\nPerforming {cv_folds}-fold cross-validation...")
+        print("=" * 50)
 
     kf = KFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
 
@@ -210,7 +217,8 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
     }
 
     for fold, (train_idx, test_idx) in enumerate(kf.split(X)):
-        print(f"Fold {fold + 1}/{cv_folds}", end=" - ")
+        if verbose:
+            print(f"Fold {fold + 1}/{cv_folds}", end=" - ")
 
         try:
             # Split data
@@ -261,7 +269,8 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
                 'model_bic': beta_results.bic
             })
 
-            print(f"r = {corr:.3f}, RMSE = {rmse:.3f}, Pseudo R² = {pseudo_r2:.3f}")
+            if verbose:
+                print(f"r = {corr:.3f}, RMSE = {rmse:.3f}, Pseudo R² = {pseudo_r2:.3f}")
 
         except Exception as e:
             print(f"FAILED - {str(e)}")
@@ -282,12 +291,13 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
             'std_log_likelihood': np.std(cv_results['log_likelihoods'])
         }
 
-        print(f"\nCross-Validation Summary:")
-        print("=" * 30)
-        print(f"Mean Correlation: {cv_summary['mean_correlation']:.4f} ± {cv_summary['std_correlation']:.4f}")
-        print(f"Mean RMSE: {cv_summary['mean_rmse']:.4f} ± {cv_summary['std_rmse']:.4f}")
-        print(f"Mean MAE: {cv_summary['mean_mae']:.4f} ± {cv_summary['std_mae']:.4f}")
-        print(f"Mean Pseudo R²: {cv_summary['mean_pseudo_r2']:.4f} ± {cv_summary['std_pseudo_r2']:.4f}")
+        if verbose:
+            print(f"\nCross-Validation Summary:")
+            print("=" * 30)
+            print(f"Mean Correlation: {cv_summary['mean_correlation']:.4f} ± {cv_summary['std_correlation']:.4f}")
+            print(f"Mean RMSE: {cv_summary['mean_rmse']:.4f} ± {cv_summary['std_rmse']:.4f}")
+            print(f"Mean MAE: {cv_summary['mean_mae']:.4f} ± {cv_summary['std_mae']:.4f}")
+            print(f"Mean Pseudo R²: {cv_summary['mean_pseudo_r2']:.4f} ± {cv_summary['std_pseudo_r2']:.4f}")
 
         # Average coefficients across folds
         if cv_results['coefficients']:
@@ -295,17 +305,19 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
             mean_coeffs = np.mean(coeff_array, axis=0)
             std_coeffs = np.std(coeff_array, axis=0)
 
-            print(f"\nAverage Coefficients Across Folds:")
-            for i, name in enumerate(predictor_names):
-                if i < len(mean_coeffs):
-                    print(f"{name:>15}: {mean_coeffs[i]:>8.4f} ± {std_coeffs[i]:.4f}")
+            if verbose:
+                print(f"\nAverage Coefficients Across Folds:")
+                for i, name in enumerate(predictor_names):
+                    if i < len(mean_coeffs):
+                        print(f"{name:>15}: {mean_coeffs[i]:>8.4f} ± {std_coeffs[i]:.4f}")
     else:
         cv_summary = None
         print("Cross-validation failed for all folds")
 
     # Fit full model on all data
-    print(f"\nFitting full model on all data...")
-    print("=" * 40)
+    if verbose:
+        print(f"\nFitting full model on all data...")
+        print("=" * 40)
 
     try:
         if add_constant:
@@ -317,8 +329,9 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
         beta_model_full = BetaModel(endog=y_beta, exog=X_full)
         beta_results_full = beta_model_full.fit()
 
-        print("Beta Model fitted successfully!")
-        print(beta_results_full.summary())
+        if verbose:
+            print("Beta Model fitted successfully!")
+            print(beta_results_full.summary())
 
         # Make predictions on full data
         y_pred_full = beta_results_full.predict(X_full)
@@ -342,13 +355,14 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
         ll_null = BetaModel(endog=y_beta, exog=np.ones((len(y_beta), 1))).fit(disp=0).llf
         pseudo_r2_full = 1 - (ll_full / ll_null)
 
-        print(f"\nFull Model Performance:")
-        print(f"Correlation: {corr_full:.4f} (p-value: {p_val_full:.4f})")
-        print(f"RMSE: {rmse_full:.4f}")
-        print(f"MAE: {mae_full:.4f}")
-        print(f"Pseudo R²: {pseudo_r2_full:.4f}")
-        print(f"AIC: {beta_results_full.aic:.4f}")
-        print(f"BIC: {beta_results_full.bic:.4f}")
+        if verbose:
+            print(f"\nFull Model Performance:")
+            print(f"Correlation: {corr_full:.4f} (p-value: {p_val_full:.4f})")
+            print(f"RMSE: {rmse_full:.4f}")
+            print(f"MAE: {mae_full:.4f}")
+            print(f"Pseudo R²: {pseudo_r2_full:.4f}")
+            print(f"AIC: {beta_results_full.aic:.4f}")
+            print(f"BIC: {beta_results_full.bic:.4f}")
 
         full_model_results = {
             'model': beta_results_full,
@@ -462,7 +476,7 @@ def plot_beta_cv_results(results):
                 # Fallback: create generic names based on coefficient array size, this will probs include stuff we don't want
                 param_names = ['const'] + [f'x{i}' for i in range(coeff_array.shape[1] - 1)]
 
-            for i in range(len(param_names)-1):  # Subtracting 1 to avoid plotting precision
+            for i in range(1, len(param_names)-1):  # Subtracting 1 to avoid plotting precision
                 param_name = param_names[i]
                 # Truncate long parameter names for legend
                 display_name = param_name[:12] + '...' if len(param_name) > 12 else param_name
@@ -471,6 +485,10 @@ def plot_beta_cv_results(results):
                                 coeff_array[:, i],
                                 'o-', alpha=0.7, label=display_name)
                 axes[1, 2].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                axes[1, 2].set_xlabel('Fold')
+                axes[1, 2].set_ylabel('Coefficient')
+                axes[1, 2].set_title('Cross-Validation: Coefficients by Fold')
+                axes[1, 2].grid(True)
 
     plt.suptitle(f'Beta Regression with Cross-Validation\n{results["formula"]}', fontsize=14)
     plt.tight_layout()
@@ -478,4 +496,144 @@ def plot_beta_cv_results(results):
 
     return fig, axes
 
-    
+
+def generate_ground_truth_data(n_samples=1000, seed=42):
+    """
+    Generate data more suited for beta regression (values in (0,1) range)
+    """
+    np.random.seed(seed)
+
+    # Ground truth parameters
+    cell_diameter_param = 0.4
+    membrane_potential_param = 0.5
+    synaptic_input_param = 0.85
+    intercept = -3.0
+    precision = 1
+
+    # Generate predictors
+    cell_diameter = np.random.uniform(1, 3, n_samples)
+    membrane_potential = np.random.uniform(1, 3, n_samples)
+    synaptic_input = np.random.uniform(1, 3, n_samples)
+
+    # Linear combination
+    linear_combination = (intercept +
+                          cell_diameter_param * cell_diameter +
+                          membrane_potential_param * membrane_potential +
+                          synaptic_input_param * synaptic_input)
+
+    # Transform to (0, 1) using logistic function for beta regression
+    # logit^(-1)(x) = exp(x) / (1 + exp(x)) or 1 / (1 + exp(-x))
+
+    link_func_vals = 1 / (1 + np.exp(-linear_combination))
+
+    """
+    Mean: \(\mu =\frac{\alpha }{\alpha +\beta }\) and mean = linear_combination
+    Precision: \(\phi =\alpha +\beta \)
+    """
+    alpha = link_func_vals * precision
+    beta = (1 - link_func_vals) * precision
+    prob_values = stats.beta.rvs(a=alpha, b=beta, size=n_samples)
+
+    # Ensure values are in (0,1) excluding boundaries
+    # prob_values_noisy = np.clip(prob_values_noisy, 0.001, 0.999)
+
+    # Convert back to (-1, 1)
+    ssi_values = 2 * prob_values - 1
+
+    data = pd.DataFrame({
+        'cell_diameter': cell_diameter,
+        'membrane_potential': membrane_potential,
+        'synaptic_input': synaptic_input,
+        'ssi': ssi_values,
+        # 'ssi_prob': prob_values  # Keep (0,1) version for beta regression
+    })
+
+    ground_truth = {
+        'intercept': intercept,
+        'cell_diameter': cell_diameter_param,
+        'membrane_potential': membrane_potential_param,
+        'synaptic_input': synaptic_input_param,
+        'alpha': alpha.mean(),
+        'beta': beta.mean(),
+        'precision': precision,
+    }
+
+    return data, ground_truth
+
+
+def parameter_recovery_test(synthetic_data, true_params):
+    """
+    Test parameter recovery across multiple trials
+
+    Parameters:
+    -----------
+    synthetic_data : DataFrame
+        Generated synthetic data
+    true_params : dict
+        Ground truth parameters
+    model_function : function
+        Your beta model fitting function (e.g., fit_beta_model_with_cv)
+    n_trials : int
+        Number of recovery trials with different noise realizations
+    """
+
+    param_names = ['intercept', 'cell_diameter', 'membrane_potential', 'synaptic_input', 'alpha', 'beta', 'precision']
+    true_values = [true_params[name] for name in param_names]
+
+    recovery_results = {
+        'parameter': [],
+        'true_value': [],
+        'estimated_value': [],
+        'error': [],
+        'relative_error': []
+    }
+
+    print(f"Running recovery")
+
+
+    # Prepare data for your model
+    X = synthetic_data[['cell_diameter', 'membrane_potential', 'synaptic_input']]
+    y = synthetic_data['ssi']
+
+    try:
+        model_results = fit_beta_model_with_cv(X, y, cv_folds=5)
+        estimated_coeffs = model_results["full_model"]['model'].params.values
+        X_full = sm.add_constant(X)
+        estimated_ssis =  model_results["full_model"]['model'].predict(X_full)
+        linear_comb = (X['cell_diameter'] * estimated_coeffs[1] +
+                       X['membrane_potential'] * estimated_coeffs[2] +
+                       X['synaptic_input'] * estimated_coeffs[3] +
+                       estimated_coeffs[0])
+
+        link_func_vals = 1 / (1 + np.exp(-linear_comb))
+        alpha = link_func_vals * estimated_coeffs[-1]
+        beta = (1 - link_func_vals) * estimated_coeffs[-1]
+        estimated_coeffs = np.insert(estimated_coeffs, -1, [alpha.mean(), beta.mean()])
+
+        # TODO: Finish binning ssis and plotting the ssis vs the mean bins
+        # Get bins of linear_comb values and then calculate means for estimated_ssis in those bins
+        counts, bin_edges, patches = plt.hist(linear_comb, bins=10)
+
+        # Use bin_edges to slice estimated_ssis into bins and take mean values
+
+        binned_ssis = 0
+
+
+    except Exception as e:
+        print(f"Model fitting failed recovery: {e}")
+        sys.exit(1)
+
+    for i, (param_name, true_val, est_val) in enumerate(zip(param_names, true_values, estimated_coeffs)):
+        # if param_name == "alpha" or param_name == "beta":
+        #     true_val = true_val[0]
+        error = est_val - true_val
+        rel_error = error / true_val if true_val != 0 else np.inf
+        recovery_results['parameter'].append(param_name)
+        recovery_results['true_value'].append(true_val)
+        recovery_results['estimated_value'].append(est_val)
+        recovery_results['error'].append(error)
+        recovery_results['relative_error'].append(rel_error)
+
+    return pd.DataFrame(recovery_results), true_values
+
+

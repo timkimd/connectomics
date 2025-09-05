@@ -20,25 +20,33 @@ fig_path = pjoin(data_root, 'temp_results')
 np.random.seed(42)
 #%% Load in test metric info for structural data and example func data
 metadata = pd.read_csv(os.path.join(data_root, 'v1dd_1196/V1DD_metadata.csv'))
-struc_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/joint_clustering_feat_df_v1dd.feather'))
-func_data = pd.read_csv(pjoin(data_root, 'v1dd_1196/surround_supression_index_M409828.csv'))
+# struc_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/joint_clustering_feat_df_v1dd.feather'))
+struc_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/structurarl_data.feather'))
+# func_data = pd.read_csv(pjoin(data_root, 'v1dd_1196/surround_supression_index_M409828.csv'))
+func_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/cell_ssi.feather'))
 coregistered_cells = pd.read_feather(pjoin(data_root, 'v1dd_1196/coregistration_1196.feather'))
 
 # Cleaning funcitonal data
-func_sub_table = func_data[['ssi', 'column', 'volume', 'plane', 'roi']]
+func_sub_table = func_data[['ssi', 'column', 'volume', 'plane', 'roi', 'pt_root_id']]
 func_sub_table['volume'] = pd.to_numeric(func_sub_table['volume'], errors='coerce').astype('Int64')
 func_sub_table.dropna(inplace=True)
 
+for col in ["dtc_num_connections", "tc_num_connections", "ptc_num_connections",]:
+    struc_data[col+"_vol_norm"] = struc_data[col]/struc_data["volume"]
+
 # Renaming column from root_id to pt_root_id
-struc_data.rename(columns={'root_id': 'pt_root_id'}, inplace=True)
+if "root_id" in struc_data.columns:
+    struc_data.rename(columns={'root_id': 'pt_root_id'}, inplace=True)
 
 #%% Merging time
-func_co_cells = pd.merge(func_sub_table, coregistered_cells, on=['column', 'volume', 'plane', 'roi'], how='inner')
+# func_co_cells = pd.merge(func_sub_table, coregistered_cells, on=['column', 'volume', 'plane', 'roi'], how='inner')
+func_co_cells = pd.merge(func_sub_table, coregistered_cells, on=["pt_root_id"], how='inner')
 final_co_table = pd.merge(func_co_cells, struc_data, on=['pt_root_id'], how='inner')
 
 #%% Correlation checking
 # SSI options are 'ssi', 'ssi_pref_both', or 'ssi_orth'
-var_list = ["ssi", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft", "soma_depth"]
+# var_list = ["ssi", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft", "soma_depth"]
+var_list = ["ssi", "dtc_num_connections_vol_norm", "tc_num_connections_vol_norm", "ptc_num_connections_vol_norm", ]
 sub_df = final_co_table[var_list].copy().reset_index(drop=True)
 # Check for NaNs in any values and drop those rows
 sub_df.dropna(inplace=True)
@@ -147,8 +155,11 @@ fig.savefig(pjoin(fig_path, 'ols_cv_results.png'), dpi=300, bbox_inches='tight')
 #%% GLM Time baby
 print("Poisson GLM Cross-Validation:")
 print("=" * 50)
+# "Normal" CV
+# cv_results = fit_beta_model_with_cv(X, y, cv_folds=5)
+# LOO CV
+cv_results = fit_beta_model_with_cv(X, y, cv_folds=X.shape[0]//2)
 
-cv_results = fit_beta_model_with_cv(X, y, cv_folds=5)
 
 # Calculate summary statistics
 cv_pseudo_r2_mean = cv_results["cv_summary"]['mean_pseudo_r2']
@@ -180,3 +191,40 @@ plt.show()
 # Plot beta results
 beta_fig, beta_axs = plot_beta_cv_results(cv_results)
 beta_fig.savefig(pjoin(fig_path, 'glm_cv_results.png'), dpi=300, bbox_inches='tight')
+
+#%% Shuffle data and rerun regression
+print("Shuffling data and re-running regression:")
+print("=" * 50)
+times_to_shuffle = 100
+shuffle_results = []
+
+for i in range(times_to_shuffle):
+    random_seed = np.random.randint(1, 10000)
+    X_shuffled = X.sample(frac=1, random_state=random_seed).reset_index(drop=True)
+    y_shuffled = y.sample(frac=1, random_state=random_seed).reset_index(drop=True)
+    cv_results_shuffled = fit_beta_model_with_cv(X_shuffled, y_shuffled, cv_folds=5, verbose=False)
+    shuffled_corr = cv_results['cv_results']['correlations']
+    cv_params = cv_results_shuffled['cv_results']['coefficients']
+    shuffle_results.append({
+        'shuffled_corr': shuffled_corr,
+        'params': cv_params,
+    })
+
+final_params = cv_results["full_model"]['model'].params.values[1:-1]
+final_param_names = param_names[1:]
+
+# Compare shuffled parameter values to actual model parameter values
+shuffled_param_df = pd.DataFrame(shuffle_results)
+shuffled_params = np.hstack(shuffled_param_df["params"].values).T
+shuffled_corr = np.hstack(shuffled_param_df["shuffled_corr"].values).T
+
+# Compute 95% CI for shuffled params
+shuffled_param_ci = np.percentile(shuffled_params, [2.5, 97.5], axis=0)
+
+# Check if each param is as extreme as the 95% CI intervals
+for param_idx in range(len(final_params)):
+    final_param = final_params[param_idx]
+    final_param_name = final_param_names[param_idx]
+    shuffled_ci = shuffled_param_ci[:, param_idx]
+    if final_param < shuffled_ci[0] or final_param > shuffled_ci[1]:
+        print(f"{final_param_name} is as extreme as the 95% CI for shuffled parameters!")
