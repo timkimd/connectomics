@@ -52,10 +52,10 @@ coreg_stim_int
 coreg_stim_int = coreg_stim_int[coreg_stim_int['pt_root_id'].apply(lambda x: len(x) > 0)]
 
 #%% load 
-file_path = '/root/capsule/scratch/coreg_dff_psth_table.pkl'
+file_path = '/root/capsule/scratch/coreg_dff_psth_dir_table.pkl'
 with open(file_path, 'rb') as file:
-    coreg_dff_psth_table = pickle.load(file)
-coreg_dff_psth_table
+    coreg_dff_psth_dir_table = pickle.load(file)
+coreg_dff_psth_dir_table
 
 #%%
 def get_stimulus_sections(stim_int_df, threshold=1.1):
@@ -95,9 +95,9 @@ def get_stimulus_mask(sections, base_times):
         mask |= (t >= float(start)) & (t <= float(end))
     return mask
 #%%
-def get_trial_sections(stim_int_df, stim_name):
+def get_trial_sections(pairs, combined_name):
     """Return (start, stop) sections for all trials of a given stim_name."""
-    df = stim_int_df.loc[stim_int_df["stim_name"] == stim_name]
+    df = pairs.loc[pairs["combined_name"] == combined_name]
     return list(zip(df["start_time"], df["stop_time"]))
 
 #%%
@@ -113,59 +113,124 @@ def get_trial_indices(base_times, trial):
     return np.where(mask)[0]
 
 #%%
+# # sessions = pd.unique(coreg_stim_int.session_id)
+# # stim_traces = []
+# # for session in sessions:
+#     this_session = coreg_stim_int[coreg_stim_int['session_id']==session]
+#     base_times = this_session.base_time
+#     t = _to_1d_float_array(base_times) 
+#     dff_obj = this_session.dff.iloc[0]  
+
+#     coreg_stim_df = pd.DataFrame({
+#         "stim_name":  this_session.stim_name,
+#         "start_time": this_session.start_time,
+#         "stop_time":  this_session.stop_time,
+#         "direction": this_session.direction
+#     })
+#     coreg_stim_df = coreg_stim_df.explode(["stim_name", "start_time", "stop_time", "direction"], ignore_index=True)
+
+#     for stim_name in ['drifting_gratings_windowed' , 'drifting_gratings_full']:
+#         #first get unique combinations of window and full with the directions
+#         stim_sections = get_trial_sections(coreg_stim_df, stim_name)
+
+# #         trial_dff_traces = []
+# #         for trial in stim_sections:
+# #             mask = get_trial_mask_from_t(t, trial)
+# #             trial_times = t[mask]
+# #             idx = np.where(mask)[0]  
+# #             #idx = get_trial_indices(base_times, trial)
+# #             trial_dff_traces.append(dff_obj[:,idx])
+
+# #         # make PSTH and get mean over trial
+# #         min_trial = min(dff.shape[1] for dff in trial_dff_traces)
+# #         stacked = np.stack([dff[:,:min_trial] for dff in trial_dff_traces], axis =2) # get cells by time by trials
+# #         psth = stacked.mean(axis=2)
+# #         psth_chop = psth[:,3:]
+# #         psth_chop_mean = psth_chop.mean(axis=1)
+
+# #         stim_traces.append({
+# #             "session_id": session,
+# #             "stimulus": stim_name,
+# #             "ttraces": trial_dff_traces,
+# #             "psth": psth,
+# #             "psth_chop": psth_chop,
+# #             "mean_chop": psth_chop_mean
+# #         })
+#%%
+
+# which drifting stimuli we care about
+DG_STIMS = ['drifting_gratings_windowed', 'drifting_gratings_full']
+
 sessions = pd.unique(coreg_stim_int.session_id)
 stim_traces = []
-for session in sessions:
-    this_session = coreg_stim_int[coreg_stim_int['session_id']==session]
-    base_times = this_session.base_time
-    t = _to_1d_float_array(base_times) 
-    dff_obj = this_session.dff.iloc[0]  
 
+for session in sessions:
+    this_session = coreg_stim_int[coreg_stim_int['session_id'] == session]
+    base_times = this_session.base_time
+    t = _to_1d_float_array(base_times)
+    dff_obj = this_session.dff.iloc[0]
+
+    # explode trials per-row
     coreg_stim_df = pd.DataFrame({
         "stim_name":  this_session.stim_name,
         "start_time": this_session.start_time,
         "stop_time":  this_session.stop_time,
-    })
-    coreg_stim_df = coreg_stim_df.explode(["stim_name", "start_time", "stop_time"], ignore_index=True)
+        "direction":  this_session.direction,
+    }).explode(["stim_name", "start_time", "stop_time", "direction"], ignore_index=True)
 
-    for stim_name in ['drifting_gratings_windowed' , 'drifting_gratings_full']:
-        stim_sections = get_trial_sections(coreg_stim_df, stim_name)
+    # only keep the two drifting-gratings families; then get unique (stim_name, direction) pairs
+    pairs = (coreg_stim_df.loc[coreg_stim_df["stim_name"].isin(DG_STIMS)])
+    pairs["combined_name"] = pairs["stim_name"].astype(str) + "_dir" + pairs["direction"].astype(str)
+
+    for _, row in pairs.iterrows():
+        stim_name      = row["stim_name"]       # original family
+        direction      = row["direction"]       # direction value
+        combined_name  = row["combined_name"]   # e.g. drifting_gratings_full_dir
+
+        stim_sections = get_trial_sections(pairs, combined_name)
 
         trial_dff_traces = []
         for trial in stim_sections:
             mask = get_trial_mask_from_t(t, trial)
-            trial_times = t[mask]
-            idx = np.where(mask)[0]  
-            #idx = get_trial_indices(base_times, trial)
-            trial_dff_traces.append(dff_obj[:,idx])
+            if not np.any(mask):
+                continue
+            idx = np.where(mask)[0]
+            trial_dff_traces.append(dff_obj[:, idx])
 
-        # make PSTH and get mean over trial
+        # PSTH over trials (truncate to shortest trial)
         min_trial = min(dff.shape[1] for dff in trial_dff_traces)
-        stacked = np.stack([dff[:,:min_trial] for dff in trial_dff_traces], axis =2) # get cells by time by trials
+        stacked = np.stack([dff[:, :min_trial] for dff in trial_dff_traces], axis=2)  # cells x time x trials
         psth = stacked.mean(axis=2)
-        psth_chop = psth[:,3:]
+        psth_chop = psth[:, 3:]  # your original chop
         psth_chop_mean = psth_chop.mean(axis=1)
 
+        # a unique id for this stimulus-type: (stim_name, direction)
+        stimulus_id = f"{stim_name}__dir{direction}"
+
+        # store fields to make “matching by direction” easy later:
         stim_traces.append({
-            "session_id": session,
-            "stimulus": stim_name,
-            "ttraces": trial_dff_traces,
-            "psth": psth,
-            "psth_chop": psth_chop,
-            "mean_chop": psth_chop_mean
-        })
+                "session_id": session,
+                "combined_name": combined_name,   # now unique stim+direction
+                "stim_name": stim_name,      # keep the family name too if you want
+                "direction": direction,
+                "ttraces": trial_dff_traces,
+                "psth": psth,
+                "psth_chop": psth_chop,
+                "mean_chop": psth_chop_mean,
+            })
+
 
 #%% to save the output of the for loop above
-coreg_traces_df = pd.DataFrame(stim_traces)
+coreg_traces_dir_df = pd.DataFrame(stim_traces)
 out_dir = "/root/capsule/scratch"
 os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, "coreg_dff_psth_table.pkl")
-coreg_traces_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
+out_path = os.path.join(out_dir, "coreg_dff_psth_dir_table.pkl")
+coreg_traces_dir_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
 
 #%% merge the dff mean traces with the metadata
 big_table = pd.merge(coreg_stim_int, coreg_dff_psth_table, how='outer', on='session_id')
-cell_table = big_table[['session_id', 'pt_root_id', 'stimulus', 'mean_chop', 'plane', 'roi']]
+cell_table = big_table[['session_id', 'pt_root_id', 'combined_name', 'mean_chop', 'plane', 'roi']]
 
 for n in range(len(cell_table)):
     cell_table.at[n, 'stimulus'] = np.repeat(

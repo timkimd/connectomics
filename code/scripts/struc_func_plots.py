@@ -49,7 +49,7 @@ struc_df = pd.read_feather(f"{scratch_dir}/structural_data.feather")
 cell_ssi_df = pd.read_feather(f"{scratch_dir}/cell_ssi.feather")
 cell_coreg_df = pd.read_feather(f"{scratch_dir}/cell_coreg.feather")
 i_to_e_chain = pd.read_feather(f"{scratch_dir}/new_IE_struct_cell_tbl_v1dd_1196.feather")
-e_to_i_chain = pd.read_feather(f"{scratch_dir}/new_EI_struct_cell_tbl_v1dd_1196.feather")
+e_to_i_chain = pd.read_feather(f"{scratch_dir}/EI_new_v1dd_1196.feather")
 e_to_e_chain = pd.read_feather(f"{scratch_dir}/E_to_E_pre_post_id.feather")
 #%% plotting RFs and Window locations
 
