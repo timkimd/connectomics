@@ -113,51 +113,6 @@ def get_trial_indices(base_times, trial):
     return np.where(mask)[0]
 
 #%%
-# # sessions = pd.unique(coreg_stim_int.session_id)
-# # stim_traces = []
-# # for session in sessions:
-#     this_session = coreg_stim_int[coreg_stim_int['session_id']==session]
-#     base_times = this_session.base_time
-#     t = _to_1d_float_array(base_times) 
-#     dff_obj = this_session.dff.iloc[0]  
-
-#     coreg_stim_df = pd.DataFrame({
-#         "stim_name":  this_session.stim_name,
-#         "start_time": this_session.start_time,
-#         "stop_time":  this_session.stop_time,
-#         "direction": this_session.direction
-#     })
-#     coreg_stim_df = coreg_stim_df.explode(["stim_name", "start_time", "stop_time", "direction"], ignore_index=True)
-
-#     for stim_name in ['drifting_gratings_windowed' , 'drifting_gratings_full']:
-#         #first get unique combinations of window and full with the directions
-#         stim_sections = get_trial_sections(coreg_stim_df, stim_name)
-
-# #         trial_dff_traces = []
-# #         for trial in stim_sections:
-# #             mask = get_trial_mask_from_t(t, trial)
-# #             trial_times = t[mask]
-# #             idx = np.where(mask)[0]  
-# #             #idx = get_trial_indices(base_times, trial)
-# #             trial_dff_traces.append(dff_obj[:,idx])
-
-# #         # make PSTH and get mean over trial
-# #         min_trial = min(dff.shape[1] for dff in trial_dff_traces)
-# #         stacked = np.stack([dff[:,:min_trial] for dff in trial_dff_traces], axis =2) # get cells by time by trials
-# #         psth = stacked.mean(axis=2)
-# #         psth_chop = psth[:,3:]
-# #         psth_chop_mean = psth_chop.mean(axis=1)
-
-# #         stim_traces.append({
-# #             "session_id": session,
-# #             "stimulus": stim_name,
-# #             "ttraces": trial_dff_traces,
-# #             "psth": psth,
-# #             "psth_chop": psth_chop,
-# #             "mean_chop": psth_chop_mean
-# #         })
-#%%
-
 # which drifting stimuli we care about
 DG_STIMS = ['drifting_gratings_windowed', 'drifting_gratings_full']
 
@@ -201,11 +156,8 @@ for session in sessions:
         min_trial = min(dff.shape[1] for dff in trial_dff_traces)
         stacked = np.stack([dff[:, :min_trial] for dff in trial_dff_traces], axis=2)  # cells x time x trials
         psth = stacked.mean(axis=2)
-        psth_chop = psth[:, 3:]  # your original chop
+        psth_chop = psth[:, 3:]  # chop the first three windows where the cell is ramping up
         psth_chop_mean = psth_chop.mean(axis=1)
-
-        # a unique id for this stimulus-type: (stim_name, direction)
-        stimulus_id = f"{stim_name}__dir{direction}"
 
         # store fields to make “matching by direction” easy later:
         stim_traces.append({
@@ -219,19 +171,18 @@ for session in sessions:
                 "mean_chop": psth_chop_mean,
             })
 
-
 #%% to save the output of the for loop above
-coreg_traces_dir_df = pd.DataFrame(stim_traces)
+coreg_dff_psth_dir_table = pd.DataFrame(stim_traces)
 out_dir = "/root/capsule/scratch"
 os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, "coreg_dff_psth_dir_table.pkl")
-coreg_traces_dir_df.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
+coreg_dff_psth_dir_table.to_pickle(out_path, protocol=pickle.HIGHEST_PROTOCOL)
 print(f"Saved to {out_path}")
+coreg_dff_psth_dir_table
 
 #%% merge the dff mean traces with the metadata
-coreg_stim_int = coreg_stim_int.drop(columns=['stim_name', 'direction'])
-
-big_table = pd.merge(coreg_stim_int, coreg_dff_psth_dir_table, how='outer', on='session_id')
+coreg_stim_int_no_stim = coreg_stim_int.drop(columns=['stim_name', 'direction'])
+big_table = pd.merge(coreg_stim_int_no_stim, coreg_dff_psth_dir_table, on='session_id', how='outer')
 
 #%%
 cell_table = big_table[['session_id', 'pt_root_id', 'combined_name', 'mean_chop', 'plane', 'roi']]
@@ -243,10 +194,10 @@ for n in range(len(cell_table)):
 cell_table = pd.DataFrame(cell_table)
 
 #%% find the RFs amd windows from metadata, map root_ids to column, volume, roi, plane
-sessions = pd.unique(coreg_stim_int.session_id)
+sessions = pd.unique(coreg_stim_int_no_stim.session_id)
 cvpr_map = []
 for session in sessions:
-    cvpr = coreg_stim_int.loc[coreg_stim_int["session_id"] == session]
+    cvpr = coreg_stim_int_no_stim.loc[coreg_stim_int_no_stim["session_id"] == session]
     column = (cvpr.column.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
     volume = (cvpr.volume.values*(np.ones(cvpr.roi.values[0].shape))).astype(int)
     plane = cvpr.plane.values[0]
@@ -255,12 +206,10 @@ for session in sessions:
         "session_id": session,
         "column": column,
         "volume": volume,
-        #"plane": plane, 
-        #"roi": roi
     }) 
 cvpr_df = pd.DataFrame(cvpr_map)
 #%%
-cell_table = pd.merge(cell_table, cvpr_df, on='session_id')
+cell_table = pd.merge(cell_table, cvpr_df, on='session_id', how='outer')
 #%%
 for n in range(len(cell_table)):
     cell_table.at[n, 'session_id'] = np.repeat(
@@ -272,14 +221,17 @@ coreg_sess_cells = cell_table.explode(
     ["session_id", "column", "volume", "pt_root_id", 
      "combined_name", "mean_chop", "plane", "roi"]
 )
+# this is 210816 rows: cells x 2 stims x 13 dirs x trials (average 14.77 trials per unique dir_sim combo)
 
 #%%
-rf_metadata.drop(columns=['mouse'])
-cell_rf = pd.merge(coreg_sess_cells, rf_metadata, on=['column', 'volume', 'plane', 'roi'])
+rf_metadata = rf_metadata.drop(columns=['mouse', 'roi_unique_id'])
+#%% its called cell_rf but actually its cells x stims x dirs x trials
+cell_rf = pd.merge(coreg_sess_cells, rf_metadata, on=['column', 'volume', 'plane', 'roi'], how='inner')
 
 #%% need to sub_select position_metadata for golden mouse, drop nans
-cell_rf_windows = pd.merge(cell_rf, position_metadata_gold, on=['column', 'volume'], how='outer')
-cell_rf_windows = cell_rf_windows.dropna(subset=['session_id'])
+
+cell_rf_windows = pd.merge(cell_rf, position_metadata_gold, on=['column', 'volume'], how='left')
+
 # save here for non ssi but all coreg, use these to compare to ssi cells
 
 out_dir = "/root/capsule/scratch"
@@ -293,6 +245,7 @@ cell_coreg_df = pd.read_feather(out_path)
 
 #%%
 cell_rf_windows = cell_rf_windows[cell_rf_windows["has_rf_on_or_off"]==True]
+# make strings of unique windows and rfs
 cell_rf_windows['window_pos'] = cell_rf_windows['azi'].astype(str) + '_' + cell_rf_windows['alt'].astype(str)
 cell_rf_windows['rf_on_pos'] = cell_rf_windows['altitude_rf_on'].astype(str) + '_' + cell_rf_windows['azimuth_rf_on'].astype(str)
 cell_rf_windows['rf_off_pos'] = cell_rf_windows['altitude_rf_off'].astype(str) + '_' + cell_rf_windows['azimuth_rf_off'].astype(str)
@@ -307,32 +260,93 @@ cell_rf_windows["rf_in_window_off"] = (
   + (cell_rf_windows["azimuth_rf_off"]  - cell_rf_windows["azi"])**2
 ) <= 15**2
 
-#%% get SSI ###FIX from here
-rows = []
-for pt_root_id, g in cell_rf_windows.groupby('pt_root_id'):
-    # pick the rows for each stimulus within this neuron's group
-    w = g.loc[g['combined_name'] == 'drifting_gratings_windowed', 'mean_chop']
-    f = g.loc[g['combined_name'] == 'drifting_gratings_full', 'mean_chop']
-    if w.empty or f.empty:
-        continue  # skip if one stimulus is missing
-    window = w.iloc[0]
-    full = f.iloc[0]
-    denom = window + full
-    ssi = (window - full) / denom if denom != 0 else np.nan
-    rows.append({'pt_root_id': pt_root_id, 'ssi': ssi})
-
-ssi_df = pd.DataFrame(rows)
+#%%
+window_metadata = window_metadata.drop(columns=['mouse', 'roi_unique_id'])
+pref_dir_cell_df = pd.merge(cell_rf_windows, window_metadata, on=['column', 'volume', 'plane', 'roi'], how='left')
 
 #%%
-base_df = cell_rf_windows.drop(columns=['stimulus']).drop_duplicates('pt_root_id')
-cell_ssi = pd.merge(base_df, ssi_df, on='pt_root_id', how='inner')
-#%% save feather
-out_dir = "/root/capsule/scratch"
-os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, "cell_ssi.feather")
-ssi_feather = cell_ssi.to_feather(out_path)
-print(f"Saved to {out_path}")
-cell_ssi_df = pd.read_feather(out_path)
+## take into account pref direction
+## add cross dir info
+## add CMI and change ss calculation
+## make table for pref dir and for cross dir
+
+def wrap360(a):  # makes all values in the same coordinate space
+    return np.mod(a, 360.0)
+
+#%% extract dir and stim
+#### fix bug
+stim_dir_arr = np.empty(len(pref_dir_cell_df))
+stim_arr = np.empty(len(pref_dir_cell_df), dtype='object')
+for i, rows in pref_dir_cell_df.iterrows():
+    my_str = rows['combined_name']
+    expl_str = my_str.split('_')
+    stim_dir = expl_str[-1][3:]
+    stim = '_'.join(expl_str[:-1])
+    stim_dir_arr[i] = stim_dir
+    stim_arr[i] = stim
+
+pref_dir_cell_df['stim_dir'] = stim_dir_arr
+pref_dir_cell_df['stim'] = stim_arr
+
+#%%
+
+pref_dir_cell_df['cross_dir_neg'] = np.mod((pref_dir_cell_df['preferred_dir'] - 90), 360.0)
+pref_dir_cell_df['cross_dir_pos'] = np.mod((pref_dir_cell_df['preferred_dir'] + 90), 360.0)
+
+iso_df = pref_dir_cell_df[pref_dir_cell_df['stim_dir'] == pref_dir_cell_df['preferred_dir']]
+cross_neg_df = pref_dir_cell_df[pref_dir_cell_df['cross_dir_neg'] == pref_dir_cell_df['stim_dir']]
+cross_pos_df = pref_dir_cell_df[pref_dir_cell_df['cross_dir_pos'] == pref_dir_cell_df['stim_dir']]
+
+#%% calculate surround suppression iso
+
+iso = iso_df.groupby(['pt_root_id', 'stim'])['mean_chop'].mean()
+iso_full = iso.xs('drifting_gratings_full', level='stim')
+iso_window = iso.xs('drifting_gratings_windowed', level='stim')
+iso_ssi_calc = (iso_window - iso_full) / (iso_window + iso_full)
+
+#%% calculate surround suppression cross neg
+
+cross_neg = cross_neg_df.groupby(['pt_root_id', 'stim'])['mean_chop'].mean()
+cross_neg_full = cross_neg.xs('drifting_gratings_full', level='stim')
+cross_neg_window = cross_neg.xs('drifting_gratings_windowed', level='stim')
+cross_neg_calc = (cross_neg_window - cross_neg_full) / (cross_neg_window + cross_neg_full)
+
+#%% calculate surround suppression cross pos
+
+cross_pos = cross_pos_df.groupby(['pt_root_id', 'stim'])['mean_chop'].mean()
+cross_pos_full = cross_pos.xs('drifting_gratings_full', level='stim')
+cross_pos_window = cross_pos.xs('drifting_gratings_windowed', level='stim')
+cross_pos_calc = (cross_pos_window - cross_pos_full) / (cross_pos_window + cross_pos_full)
+
+#%% make final feather
+
+iso_ssi = iso_ssi_calc.to_frame().rename(columns={'mean_chop': 'iso_ssi'})
+cross_neg_ssi = cross_neg_calc.to_frame().rename(columns={'mean_chop': 'cross_neg_ssi'})
+cross_pos_ssi = cross_pos_calc.to_frame().rename(columns={'mean_chop': 'cross_pos_ssi'})
+
+iso_cross_neg = pd.merge(iso_ssi, cross_neg_ssi, on='pt_root_id', how='outer')
+iso_cross_neg_pos = pd.merge(iso_cross_neg, cross_pos_ssi, on='pt_root_id', how='outer')
+
+cell_df = pref_dir_cell_df[['pt_root_id', 'plane', 'roi', 'column', 'volume', 'dsi',
+                            'frac_responsive_trials', 'is_responsive',
+                            'lifetime_sparseness', 'osi', 'preferred_dir', 'preferred_sf',
+                            'pref_dir_mean']]
+
+cell_ssi = pd.merge(cell_df, iso_cross_neg_pos, on=['pt_root_id'], how='inner')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #%% plotting RFs and Window locations
 x = position_metadata.azi 

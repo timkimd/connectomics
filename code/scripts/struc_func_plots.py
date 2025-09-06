@@ -46,7 +46,7 @@ e_to_i = pd.read_feather(f"{scratch_dir}/E_to_I.feather")
 i_to_e = pd.read_feather(f"{scratch_dir}/I_to_E.feather")
 e_to_e = pd.read_feather(f"{scratch_dir}/E_to_E_total_con.feather")
 struc_df = pd.read_feather(f"{scratch_dir}/structural_data.feather")
-cell_ssi_df = pd.read_feather(f"{scratch_dir}/cell_ssi.feather")
+cell_ssi_df = pd.read_feather(f"{scratch_dir}/cell_ssi_dir.feather")
 cell_coreg_df = pd.read_feather(f"{scratch_dir}/cell_coreg.feather")
 i_to_e_chain = pd.read_feather(f"{scratch_dir}/new_IE_struct_cell_tbl_v1dd_1196.feather")
 e_to_i_chain = pd.read_feather(f"{scratch_dir}/EI_new_v1dd_1196.feather")
@@ -86,15 +86,17 @@ i_to_ssi = pd.merge(i_to_e, cell_ssi_df, on='pt_root_id', how='inner')
 #%% plot ssi by layer
 plt.figure(figsize=(8,6))
 sns.boxplot(
-    data=struc_func_df, 
+    data=filtered, 
     x="cell_type",
     y="ssi",
+    hue="dir",
     palette="Set2"
 )
 
-plt.title("SSI by Cell Type")
+plt.title("SSI by Cell Type and dir")
 plt.xlabel("Cell Type")
 plt.ylabel("SSI")
+plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
 plt.show()
 
 #%%
