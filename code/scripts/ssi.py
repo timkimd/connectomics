@@ -22,10 +22,10 @@ import pickle
 utils_dir = pjoin("..", "utils")
 
 # Add utilities to path
-sys.path.append(utils_dir)
-from data_io import *
-from utils import filter_synapse_table, check_index, adjacencyplot
-from data_io import _get_data_dir
+# sys.path.append(utils_dir)
+# from data_io import *
+# from utils import filter_synapse_table, check_index, adjacencyplot
+# from data_io import _get_data_dir
 
 # get metadata
 data_dir = '/data/'
@@ -34,6 +34,7 @@ mat_version = 1196
 metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'V1DD_metadata.csv'))
 rf_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'rf_metrics_M409828.csv'))
 window_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_windowed_M409828.csv'))
+full_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'drifting_gratings_full_M409828.csv'))
 ssi_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'surround_supression_index_M409828.csv'))
 position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'window_positions.csv'))
 golden_mouse =  409828
@@ -216,6 +217,7 @@ for n in range(len(cell_table)):
         cell_table.at[n, 'session_id'],
         len(cell_table.at[n, 'pt_root_id']))
 cell_table = pd.DataFrame(cell_table)
+
 #%%
 coreg_sess_cells = cell_table.explode(
     ["session_id", "column", "volume", "pt_root_id", 
@@ -260,8 +262,12 @@ cell_rf_windows["rf_in_window_off"] = (
   + (cell_rf_windows["azimuth_rf_off"]  - cell_rf_windows["azi"])**2
 ) <= 15**2
 
-#%%
+#%%################################### 
 window_metadata = window_metadata.drop(columns=['mouse', 'roi_unique_id'])
+window_metadata["volume"] = pd.to_numeric(
+    window_metadata["volume"], errors="coerce"
+).astype("Int64")
+
 pref_dir_cell_df = pd.merge(cell_rf_windows, window_metadata, on=['column', 'volume', 'plane', 'roi'], how='left')
 
 #%%
@@ -293,7 +299,7 @@ pref_dir_cell_df['stim'] = stim_arr
 pref_dir_cell_df['cross_dir_neg'] = np.mod((pref_dir_cell_df['preferred_dir'] - 90), 360.0)
 pref_dir_cell_df['cross_dir_pos'] = np.mod((pref_dir_cell_df['preferred_dir'] + 90), 360.0)
 
-iso_df = pref_dir_cell_df[pref_dir_cell_df['stim_dir'] == pref_dir_cell_df['preferred_dir']]
+iso_df = pref_dir_cell_df[iso_df = pref_dir_cell_df[pref_dir_cell_df['stim_dir'] == pref_dir_cell_df['preferred_dir']] == pref_dir_cell_df['preferred_dir']]
 cross_neg_df = pref_dir_cell_df[pref_dir_cell_df['cross_dir_neg'] == pref_dir_cell_df['stim_dir']]
 cross_pos_df = pref_dir_cell_df[pref_dir_cell_df['cross_dir_pos'] == pref_dir_cell_df['stim_dir']]
 
