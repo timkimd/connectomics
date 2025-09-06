@@ -41,10 +41,13 @@ func_co_cells = pd.merge(func_sub_table, coregistered_cells, on=["pt_root_id"], 
 final_co_table = pd.merge(func_co_cells, struc_data, on=['pt_root_id'], how='inner')
 
 #%% Additional column calcs
+# Incase SSI from df/f values are less than -1 or greater than 1, clip the column to -1 and 1
+# final_co_table["ssi"] = final_co_table["ssi"].clip(-1, 1)
+final_co_table["ssi"] = np.tanh(final_co_table["ssi"])
 for col in ["dtc_num_connections", "itc_num_connections", "ptc_num_connections",]:
     inhib_type = col.split("_")[0]
     final_co_table[col+"_vol_norm"] = final_co_table[col]/final_co_table["volume"]
-    final_co_table[col+"_strength_norm"] = final_co_table[col]/final_co_table[f"{inhib_type}_sum_size"]
+    final_co_table[f"{inhib_type}_mean_strength_synapse"] = final_co_table[f"{inhib_type}_sum_size"]/final_co_table[col]
 
 sub_df = final_co_table.drop(columns=final_co_table.columns[1:10])
 sub_df = sub_df.drop(columns="cell_type").reset_index(drop=True)
@@ -79,7 +82,7 @@ g.fig.tight_layout()
 plt.savefig(pjoin(fig_path, 'pairwise_density.png'), dpi=300, bbox_inches='tight')
 g.fig.show()
 
-corr_mat = pd.DataFrame(sub_df.corr())
+corr_mat = pd.DataFrame(sub_df.corr(method='pearson'))
 plt.figure(figsize=(24, 24))
 sns.heatmap(corr_mat, annot=True, cmap='coolwarm', center=0,
             square=True, fmt='.3f')
@@ -88,6 +91,10 @@ plt.tight_layout()
 plt.savefig(pjoin(fig_path, 'corr_mat.png'), dpi=300, bbox_inches='tight')
 plt.show()
 
+ssi_sorted = corr_mat.ssi.sort_values()
+plt.figure(figsize=(6, 6))
+sns.histplot(x=ssi_sorted, bins=6, kde=True, color='purple')
+plt.show()
 # Create a pairplot to visualize relationships
 # sns.pairplot(sub_df, diag_kind='hist')
 # plt.suptitle('Pairwise Relationships', y=1.02)
@@ -95,7 +102,7 @@ plt.show()
 # plt.show()
 
 #%% Split into X and Y
-X = sub_df[np.array(var_list)[np.array([3, 12, 14, 16])]]
+X = sub_df[np.array(var_list)[np.array([12, 13, 14])]]
 y = sub_df[var_list[0]]
 
 #%% OLS model fitting
@@ -164,7 +171,7 @@ print("=" * 50)
 # "Normal" CV
 # cv_results = fit_beta_model_with_cv(X, y, cv_folds=5)
 # LOO CV
-cv_results = fit_beta_model_with_cv(X, y, cv_folds=X.shape[0]//2)
+cv_results = fit_beta_model_with_cv(X, y, cv_folds=5)
 
 
 # Calculate summary statistics
@@ -188,7 +195,7 @@ for i, name in enumerate(param_names):
     print(f"{name}: {mean_coeffs[i]:.4f} ± {std_coeffs[i]:.4f} (exp: {exp_coeff:.4f})")
 
 # box plot of coefficient values, not including precision
-sns.boxplot(data=pd.DataFrame(coeff_array[:, :-1], columns=[param_names]), orient='h')
+sns.boxplot(data=pd.DataFrame(coeff_array[:, 1:-1], columns=[param_names[1:]]), orient='h')
 plt.title('Average Coefficient Values Across Folds')
 plt.tight_layout()
 plt.savefig(pjoin(fig_path, 'glm_boxplot.png'), dpi=300, bbox_inches='tight')

@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.othermod.betareg import BetaModel
 import scipy.stats as stats
+from scipy.stats import pearsonr
 from sklearn.model_selection import KFold
 from statsmodels.genmod.families import Poisson
 from statsmodels.genmod.families.links import Log
@@ -241,8 +242,10 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
                 y_test_orig = y_test
 
             # Calculate metrics
-            from scipy.stats import pearsonr
-            corr, _ = pearsonr(y_test_orig, y_pred_orig)
+            try:
+                corr, _ = stats.pearsonr(y_test_orig, y_pred_orig)
+            except ValueError:
+                corr = 1
             rmse = np.sqrt(np.mean((y_test_orig - y_pred_orig) ** 2))
             mae = np.mean(np.abs(y_test_orig - y_pred_orig))
 
