@@ -27,7 +27,7 @@ func_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/cell_ssi.feather'))
 coregistered_cells = pd.read_feather(pjoin(data_root, 'v1dd_1196/coregistration_1196.feather'))
 
 # Cleaning funcitonal data
-func_sub_table = func_data[['ssi', 'column', 'volume', 'plane', 'roi', 'pt_root_id']]
+func_sub_table = func_data[['iso_ssi', 'column', 'volume', 'plane', 'roi', 'pt_root_id']]
 func_sub_table['volume'] = pd.to_numeric(func_sub_table['volume'], errors='coerce').astype('Int64')
 func_sub_table.dropna(inplace=True)
 
@@ -42,8 +42,8 @@ final_co_table = pd.merge(func_co_cells, struc_data, on=['pt_root_id'], how='inn
 
 #%% Additional column calcs
 # Incase SSI from df/f values are less than -1 or greater than 1, clip the column to -1 and 1
-# final_co_table["ssi"] = final_co_table["ssi"].clip(-1, 1)
-final_co_table["ssi"] = np.tanh(final_co_table["ssi"])
+final_co_table["iso_ssi"] = final_co_table["iso_ssi"].clip(-1, 1)
+# final_co_table["ssi"] = np.tanh(final_co_table["ssi"])
 for col in ["dtc_num_connections", "itc_num_connections", "ptc_num_connections",]:
     inhib_type = col.split("_")[0]
     final_co_table[col+"_vol_norm"] = final_co_table[col]/final_co_table["volume"]
@@ -51,12 +51,15 @@ for col in ["dtc_num_connections", "itc_num_connections", "ptc_num_connections",
 
 sub_df = final_co_table.drop(columns=final_co_table.columns[1:10])
 sub_df = sub_df.drop(columns="cell_type").reset_index(drop=True)
+# z-score the column values
+for col in sub_df.columns[1:]:
+    sub_df[col] = (final_co_table[col] - sub_df[col].mean())/sub_df[col].std()
 
 #%% Correlation checking
 # SSI options are 'ssi', 'ssi_pref_both', or 'ssi_orth'
-# var_list = ["ssi", "soma_area_to_volume_ratio", "median_density_spine", "soma_synapse_density_um", "median_density_shaft", "soma_depth"]
-var_list = sub_df.columns.tolist()
-# sub_df = final_co_table[var_list].copy().reset_index(drop=True)
+var_list = ["iso_ssi", "avg_eucl_dist", "dtc_num_connections_vol_norm", "volume", "dtc_mean_strength_synapse"]
+# var_list = sub_df.columns.tolist()
+sub_df = sub_df[var_list].copy().reset_index(drop=True)
 # Check for NaNs in any values and drop those rows
 sub_df.dropna(inplace=True)
 
@@ -77,21 +80,21 @@ g.map_upper(hide_current_axis)
 g.map_diag(sns.kdeplot, hue=None, legend=False, bw_method = 'scott')
 
 # Formatting
-g.fig.set_size_inches(24,24)
+g.fig.set_size_inches(10,10)
 g.fig.tight_layout()
-plt.savefig(pjoin(fig_path, 'pairwise_density.png'), dpi=300, bbox_inches='tight')
+plt.savefig(pjoin(fig_path, 'pairwise_density.png'), dpi=300, bbox_inches='tight', transparent=True)
 g.fig.show()
 
 corr_mat = pd.DataFrame(sub_df.corr(method='pearson'))
-plt.figure(figsize=(24, 24))
+plt.figure(figsize=(6, 6))
 sns.heatmap(corr_mat, annot=True, cmap='coolwarm', center=0,
             square=True, fmt='.3f')
 plt.title('Correlation Matrix Heatmap')
 plt.tight_layout()
-plt.savefig(pjoin(fig_path, 'corr_mat.png'), dpi=300, bbox_inches='tight')
+plt.savefig(pjoin(fig_path, 'corr_mat.png'), dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
 
-ssi_sorted = corr_mat.ssi.sort_values()
+ssi_sorted = corr_mat.iso_ssi.sort_values()
 plt.figure(figsize=(6, 6))
 sns.histplot(x=ssi_sorted, bins=6, kde=True, color='purple')
 plt.show()
@@ -102,7 +105,8 @@ plt.show()
 # plt.show()
 
 #%% Split into X and Y
-X = sub_df[np.array(var_list)[np.array([12, 13, 14])]]
+# X = sub_df[np.array(var_list)[np.array([12, 13, 14])]]
+X = sub_df[var_list[1:]]
 y = sub_df[var_list[0]]
 
 #%% OLS model fitting
@@ -163,7 +167,7 @@ axes[2].legend(coeff_df.columns, bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
 plt.show()
 
-fig.savefig(pjoin(fig_path, 'ols_cv_results.png'), dpi=300, bbox_inches='tight')
+fig.savefig(pjoin(fig_path, 'ols_cv_results.png'), dpi=300, bbox_inches='tight', transparent=True)
 
 #%% GLM Time baby
 print("Poisson GLM Cross-Validation:")
@@ -198,12 +202,12 @@ for i, name in enumerate(param_names):
 sns.boxplot(data=pd.DataFrame(coeff_array[:, 1:-1], columns=[param_names[1:]]), orient='h')
 plt.title('Average Coefficient Values Across Folds')
 plt.tight_layout()
-plt.savefig(pjoin(fig_path, 'glm_boxplot.png'), dpi=300, bbox_inches='tight')
+plt.savefig(pjoin(fig_path, 'glm_boxplot.png'), dpi=300, bbox_inches='tight', transparent=True)
 plt.show()
 
 # Plot beta results
 beta_fig, beta_axs = plot_beta_cv_results(cv_results)
-beta_fig.savefig(pjoin(fig_path, 'glm_cv_results.png'), dpi=300, bbox_inches='tight')
+beta_fig.savefig(pjoin(fig_path, 'glm_cv_results.png'), dpi=300, bbox_inches='tight', transparent=True)
 
 #%% Shuffle data and rerun regression
 print("Shuffling data and re-running regression:")

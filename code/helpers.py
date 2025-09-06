@@ -202,7 +202,7 @@ def fit_beta_model_with_cv(X, y, formula=None, add_constant=True, precision_form
         print(f"\nPerforming {cv_folds}-fold cross-validation...")
         print("=" * 50)
 
-    kf = KFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
+    kf = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
 
     cv_results = {
         'correlations': [],

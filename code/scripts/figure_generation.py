@@ -65,7 +65,7 @@ func_data = pd.read_feather(pjoin(data_root, 'v1dd_1196/cell_ssi.feather'))
 coregistered_cells = pd.read_feather(pjoin(data_root, 'v1dd_1196/coregistration_1196.feather'))
 
 # Cleaning funcitonal data
-func_sub_table = func_data[['ssi', 'column', 'volume', 'plane', 'roi', 'pt_root_id']]
+func_sub_table = func_data[['iso_ssi', 'column', 'volume', 'plane', 'roi', 'pt_root_id']]
 func_sub_table['volume'] = pd.to_numeric(func_sub_table['volume'], errors='coerce').astype('Int64')
 # func_sub_table.dropna(inplace=True)
 
@@ -78,7 +78,7 @@ if "root_id" in struc_data.columns:
 func_co_cells = pd.merge(func_sub_table, coregistered_cells, on=["pt_root_id"], how='inner')
 final_co_table = pd.merge(func_co_cells, struc_data, on=['pt_root_id'], how='inner')
 
-final_co_table["ssi"] = np.tanh(final_co_table["ssi"])
+final_co_table["iso_ssi"] = final_co_table["iso_ssi"].clip(-1, 1)
 for col in ["dtc_num_connections", "itc_num_connections", "ptc_num_connections",]:
     inhib_type = col.split("_")[0]
     final_co_table[col+"_vol_norm"] = final_co_table[col]/final_co_table["volume"]
@@ -87,11 +87,11 @@ for col in ["dtc_num_connections", "itc_num_connections", "ptc_num_connections",
 #%% Figure 1 -- Scatter of # inhib connections vs SSI
 fig1, ax1 = plt.subplots(1, 1, figsize=(7, 7))
 # Calculate p-value
-ssi_vals = final_co_table['ssi'].values
+ssi_vals = final_co_table['iso_ssi'].values
 dtc_vals = final_co_table["dtc_num_connections_vol_norm"].values
 r, p_val = stats.pearsonr(dtc_vals, ssi_vals)
 
-sns.scatterplot(x="dtc_num_connections_vol_norm", y="ssi", data=final_co_table, alpha=0.7, s=10)
+sns.scatterplot(x="dtc_num_connections_vol_norm", y="iso_ssi", data=final_co_table, alpha=0.7, s=10)
 ax1.set_xlabel("Number of DTC Connections normalized by volume")
 ax1.set_ylabel("SSI")
 ax1.set_title(f"SSI vs Number of DTC Connections, p-value: {p_val:.3f}, r: {r:.3f}")
@@ -115,14 +115,14 @@ def categorize_ssi(ssi_value):
     else:
         return 'SSI > 0.25'
 
-final_co_table['ssi_group'] = final_co_table['ssi'].apply(categorize_ssi)
+final_co_table['ssi_group'] = final_co_table['iso_ssi'].apply(categorize_ssi)
 # Shuffle SSI values to calculate if significance
 shuffle_count = 1000
 shuffle_frame = final_co_table["avg_eucl_dist"].to_frame()
 shuffled_dist_sig_SSI = []
 
 for i in range(shuffle_count):
-    shuffle_ssi = np.random.permutation(final_co_table['ssi'].values)
+    shuffle_ssi = np.random.permutation(final_co_table['iso_ssi'].values)
     shuffle_frame[f"ssi"] = shuffle_ssi
     shuffle_frame[f"shuffle_group"] = shuffle_frame["ssi"].apply(categorize_ssi)
     group_means = shuffle_frame.groupby([f"shuffle_group"]).mean()
@@ -142,12 +142,12 @@ plt.tight_layout()
 plt.savefig(pjoin(fig_path, 'euc_dist_soma_inhib_soma_supres.png'), dpi=300, bbox_inches='tight')
 plt.show()
 
-fig4b, ax4b = plt.subplots(1, 1, figsize=(10, 6))
+fig4b, ax4b = plt.subplots(1, 1, figsize=(8, 6))
 sns.histplot(data=final_co_table, x='avg_eucl_dist', hue='ssi_group',
              bins=25, alpha=0.6, edgecolor='black', kde=True)
-ax4b.set_xlabel('Euclidean Distance (um)')
+ax4b.set_xlabel(r'Euclidean Distance ($\mu$m)', fontsize=14)
 ax4b.set_ylabel('Count')
-ax4b.set_title(f'Distribution of Euclidean Distance by SSI Groups -- p-value < {p_value:.3f} for SSI > 0.25')
+ax4b.set_title(f'Mean Euclidean Distance from Inhibitory Cells to Excititory Cells -- p-value = {p_value:.3f} for SSI > 0.25')
 plt.tight_layout()
 plt.savefig(pjoin(fig_path, 'euc_dist_hist_.png'), dpi=300, bbox_inches='tight')
 plt.show()
@@ -155,7 +155,7 @@ plt.show()
 
 #%% Figure 4c -- Scatter of euc distance vs SSI
 fig_4c, ax_4c = plt.subplots(1, 1, figsize=(5, 5))
-sns.scatterplot(x="euclidean_distance", y="ssi", data=final_co_table, alpha=0.7, s=10)
+sns.scatterplot(x="euclidean_distance", y="iso_ssi", data=final_co_table, alpha=0.7, s=10)
 ax_4c.set_xlabel("Number of DTC Connections")
 ax_4c.set_ylabel("SSI")
 ax_4c.set_title("SSI vs Number of DTC Connections")

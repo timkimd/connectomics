@@ -9,7 +9,6 @@ from os.path import join as pjoin
 import platform
 
 from helpers import OLS_CV, fit_beta_model_with_cv, plot_beta_cv_results
-from scripts.correlation_checks_one_param_looping import func_sub_table
 
 platstring = platform.platform()
 system = platform.system()
@@ -28,12 +27,14 @@ func_data_david = pd.read_csv(pjoin(data_root, 'v1dd_1196/surround_supression_in
 func_data_david['volume'] = pd.to_numeric(func_data_david['volume'], errors='coerce').astype('Int64')
 func_co_cells_david = pd.merge(func_data_david, coregistered_cells, on=["column", "volume", "plane", "roi"], how='inner')
 func_co_cells_sasha = pd.merge(func_data_sasha, coregistered_cells, on=["pt_root_id"], how='inner')
-func_co_cells_sasha.rename(columns={'ssi': 'ssi_sasha'}, inplace=True)
+func_co_cells_sasha.rename(columns={'iso_ssi': 'ssi_sasha'}, inplace=True)
 func_co_cells_david.rename(columns={'ssi': 'ssi_david'}, inplace=True)
 
 func_co_cells_both = pd.merge(func_co_cells_david, func_co_cells_sasha, on=['pt_root_id'], how='inner')
 
 func_sub_table = func_co_cells_both[['ssi_sasha', 'ssi_david']]
+func_sub_table['ssi_sasha'] = func_sub_table['ssi_sasha'].clip(-1, 1)
+func_sub_table['ssi_david'] = func_sub_table['ssi_david'].clip(-1, 1)
 func_sub_table.dropna(inplace=True)
 
 #%% Scatter of sasha ssi vs david ssi
