@@ -21,12 +21,6 @@ import pickle
 # Set the utils path
 utils_dir = pjoin("..", "utils")
 
-# Add utilities to path
-# sys.path.append(utils_dir)
-# from data_io import *
-# from utils import filter_synapse_table, check_index, adjacencyplot
-# from data_io import _get_data_dir
-
 # get metadata
 data_dir = '/data/'
 scratch_dir = '/scratch/'
@@ -40,9 +34,7 @@ position_metadata = pd.read_csv(os.path.join(data_dir, 'metadata', 'window_posit
 golden_mouse =  409828
 position_metadata_gold = position_metadata[position_metadata["mouse"] == golden_mouse]
 rf_metadata['volume'] = pd.to_numeric(rf_metadata['volume'], errors='coerce').astype('Int64')
-coreg_df = pd.read_feather(
-    f"{data_dir}/metadata/coregistration_{mat_version}.feather"
-)
+coreg_df = pd.read_feather(f"{data_dir}/metadata/coregistration_{mat_version}.feather")
 coreg_df_unq = coreg_df.drop_duplicates(subset="pt_root_id")
 #%% load coreg_stim_int
 file_path = '/root/capsule/scratch/coreg_stim_int.pkl'
@@ -223,8 +215,6 @@ coreg_sess_cells = cell_table.explode(
     ["session_id", "column", "volume", "pt_root_id", 
      "combined_name", "mean_chop", "plane", "roi"]
 )
-# this is 210816 rows: cells x 2 stims x 13 dirs x trials (average 14.77 trials per unique dir_sim combo)
-
 #%%
 rf_metadata = rf_metadata.drop(columns=['mouse', 'roi_unique_id'])
 #%% its called cell_rf but actually its cells x stims x dirs x trials
@@ -264,12 +254,11 @@ cell_rf_windows["rf_in_window_off"] = (
 
 #%%################################### 
 window_metadata = window_metadata.drop(columns=['mouse', 'roi_unique_id'])
-window_metadata["volume"] = pd.to_numeric(
-    window_metadata["volume"], errors="coerce"
-).astype("Int64")
-
+window_metadata["volume"] = pd.to_numeric(window_metadata["volume"], errors="coerce").astype("Int64")
+#%%
 pref_dir_cell_df = pd.merge(cell_rf_windows, window_metadata, on=['column', 'volume', 'plane', 'roi'], how='left')
 
+pref_dir_cell_df = pref_dir_cell_df.drop_duplicates(subset=['pt_root_id', 'combined_name']).reset_index()
 #%%
 ## take into account pref direction
 ## add cross dir info
@@ -299,7 +288,7 @@ pref_dir_cell_df['stim'] = stim_arr
 pref_dir_cell_df['cross_dir_neg'] = np.mod((pref_dir_cell_df['preferred_dir'] - 90), 360.0)
 pref_dir_cell_df['cross_dir_pos'] = np.mod((pref_dir_cell_df['preferred_dir'] + 90), 360.0)
 
-iso_df = pref_dir_cell_df[iso_df = pref_dir_cell_df[pref_dir_cell_df['stim_dir'] == pref_dir_cell_df['preferred_dir']] == pref_dir_cell_df['preferred_dir']]
+iso_df = pref_dir_cell_df[pref_dir_cell_df['stim_dir'] == pref_dir_cell_df['preferred_dir']] 
 cross_neg_df = pref_dir_cell_df[pref_dir_cell_df['cross_dir_neg'] == pref_dir_cell_df['stim_dir']]
 cross_pos_df = pref_dir_cell_df[pref_dir_cell_df['cross_dir_pos'] == pref_dir_cell_df['stim_dir']]
 
@@ -336,9 +325,18 @@ iso_cross_neg_pos = pd.merge(iso_cross_neg, cross_pos_ssi, on='pt_root_id', how=
 cell_df = pref_dir_cell_df[['pt_root_id', 'plane', 'roi', 'column', 'volume', 'dsi',
                             'frac_responsive_trials', 'is_responsive',
                             'lifetime_sparseness', 'osi', 'preferred_dir', 'preferred_sf',
-                            'pref_dir_mean']]
+                            'pref_dir_mean']].drop_duplicates(subset=['pt_root_id'])
 
-cell_ssi = pd.merge(cell_df, iso_cross_neg_pos, on=['pt_root_id'], how='inner')
+#%%
+cell_ssi = pd.merge(iso_cross_neg_pos, cell_df, on=['pt_root_id'], how='left')
+#%%
+out_dir = "/root/capsule/scratch"
+os.makedirs(out_dir, exist_ok=True)
+out_path = os.path.join(out_dir, "cell_ssi.feather")
+ssi_feather = cell_ssi.to_feather(out_path)
+print(f"Saved to {out_path}")
+
+cell_ssi = pd.read_feather(out_path)
 
 
 
@@ -355,8 +353,8 @@ cell_ssi = pd.merge(cell_df, iso_cross_neg_pos, on=['pt_root_id'], how='inner')
 
 
 #%% plotting RFs and Window locations
-x = position_metadata.azi 
-y = position_metadata.alt
+x = position_metadata_gold.azi 
+y = position_metadata_gold.alt
 
 x1 = cell_ssi_df.azi
 y1 = cell_ssi_df.alt
